@@ -1,0 +1,137 @@
+<UserControl x:Class="RDS_Results.SettingsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel MaxWidth="920" HorizontalAlignment="Left">
+        <TextBlock Text="Connection" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,10"
+                           Text="These values reach the RaceDay Scoring HTTP connector. Results refresh on their own while Automatic is checked."/>
+                <WrapPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Host" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="HostBox" x:FieldModifier="internal" Width="180" Margin="0,4,0,0" LostFocus="HostBox_LostFocus"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Port" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="PortBox" x:FieldModifier="internal" Width="80" Margin="0,4,0,0"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Password" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="PasswordBox" x:FieldModifier="internal" Width="140" Margin="0,4,0,0"
+                                 ToolTip="Shared connector password. Mantis currently sends 12345 on this HTTP API."/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Refresh seconds" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="IntervalBox" x:FieldModifier="internal" Width="110" Margin="0,4,0,0"
+                                 ToolTip="How often the background refresh downloads every available report. 2 to 3600."
+                                 LostFocus="IntervalBox_LostFocus"/>
+                    </StackPanel>
+                    <CheckBox x:Name="AutoRefreshBox" x:FieldModifier="internal"
+                              Content="Automatic"
+                              Margin="0,22,12,8"
+                              Checked="AutoRefreshBox_Changed"
+                              Unchecked="AutoRefreshBox_Changed"/>
+                    <Button x:Name="RefreshButton" x:FieldModifier="internal" Content="Refresh now" Margin="0,18,0,8" Click="RefreshButton_Click"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Appearance" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="LightThemeButton" x:FieldModifier="internal" Style="{StaticResource PillButton}" Click="LightThemeButton_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE706;" FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Light" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button x:Name="DarkThemeButton" x:FieldModifier="internal" Style="{StaticResource PillButton}" Margin="0" Click="DarkThemeButton_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE708;" FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Dark" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Bib listener" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,10"
+                           Text="The hub password opens the announcer socket. It is separate from the HTTP connector password. Choose which timing locations to follow on the Bib reads view."/>
+                <WrapPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Listen port" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="ListenPortBox" x:FieldModifier="internal" Width="90" Margin="0,4,0,0" LostFocus="ListenSettings_LostFocus"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Listen password" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="ListenPasswordBox" x:FieldModifier="internal" Width="160" Margin="0,4,0,0"
+                                 ToolTip="Hub password set in RaceDay Scoring."
+                                 LostFocus="ListenSettings_LostFocus"/>
+                    </StackPanel>
+                    <CheckBox x:Name="ListenBox" x:FieldModifier="internal"
+                              Content="Listen"
+                              Margin="0,22,0,8"
+                              Checked="ListenBox_Changed"
+                              Unchecked="ListenBox_Changed"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Bib reads" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,10"
+                           Text="Choose where each bib read goes. A display client connects to this computer and shows the reads. That client is the stand-in for the jumbotron. The message format is SendBibReads.md."/>
+                <WrapPanel>
+                    <CheckBox x:Name="SendReadsBox" x:FieldModifier="internal"
+                              Content="Send bib reads to a display client"
+                              Margin="0,8,16,8"
+                              Checked="SendReadsBox_Changed"
+                              Unchecked="SendReadsBox_Changed"/>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Display port" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="SendPortBox" x:FieldModifier="internal" Width="90" Margin="0,4,0,0"
+                                 ToolTip="TCP port display clients connect to."
+                                 LostFocus="SendPortBox_LostFocus"/>
+                    </StackPanel>
+                </WrapPanel>
+                <TextBlock x:Name="SendStatusText" x:FieldModifier="internal"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource MutedBrush}"/>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Saved lists" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Output folder" Foreground="{DynamicResource MutedBrush}"/>
+                <DockPanel Margin="0,4,0,10">
+                    <Button DockPanel.Dock="Right" Content="Browse" Margin="8,0,0,0" Click="BrowseButton_Click"/>
+                    <TextBox x:Name="OutputFolderBox" x:FieldModifier="internal" VerticalContentAlignment="Center"
+                             ToolTip="Folder where Save lists writes the current reports."/>
+                </DockPanel>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="SaveButton" x:FieldModifier="internal" Content="Save lists" Margin="0,0,8,0" Click="SaveButton_Click"/>
+                    <Button x:Name="OpenFolderButton" x:FieldModifier="internal" Content="Open folder" IsEnabled="False" Click="OpenFolderButton_Click"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Log" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="12">
+            <TextBox x:Name="LogBox" x:FieldModifier="internal"
+                     IsReadOnly="True"
+                     FontFamily="Consolas"
+                     FontSize="12"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     Foreground="{DynamicResource MutedBrush}"
+                     TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     Height="180"/>
+        </Border>
+    </StackPanel>
+</UserControl>

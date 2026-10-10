@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>RDS_Results</RootNamespace>
+    <AssemblyName>RDS_Results</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="banner.png" />
+  </ItemGroup>
+
+</Project>
