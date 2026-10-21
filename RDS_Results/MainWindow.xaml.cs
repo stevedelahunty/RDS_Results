@@ -9,6 +9,7 @@ using System.Windows.Data;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
+using LibVLCSharp.Shared;
 
 namespace RDS_Results;
 
@@ -41,6 +42,8 @@ public partial class MainWindow : Window
     bool _suppressLocationChange;
     bool _networkStarted;
     bool _suppressSettings;
+    bool _suppressJumboMode;
+    string _liveJumbotronMode = JumbotronModes.BibReads;
     int _nextReadId = 1;
     List<string>? _savedLocationNames;
     readonly AppSettings _settings = new();
@@ -51,6 +54,9 @@ public partial class MainWindow : Window
     string _sendStatus = "Bib reads stay on this computer until sending starts.";
     int _displayCount;
     DispatcherTimer? _clock;
+    LibVLC? _libVlc;
+    LibVLCSharp.Shared.MediaPlayer? _cameraPlayer;
+    string _openCameraUrl = "";
 
     public MainWindow()
     {
@@ -59,6 +65,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         ReportSections.ItemsSource = _sections;
         LocationChoices.ItemsSource = _locations;
+        FillJumboModeBox();
         PaintViewButtons();
         PaintLive();
         StartClock();
@@ -95,6 +102,7 @@ public partial class MainWindow : Window
             TaskScheduler.Default).Unwrap();
         if (_settings.Listen)
             StartListening();
+        ApplyCamera();
     }
 
     protected override void OnClosed(EventArgs e)
@@ -102,6 +110,7 @@ public partial class MainWindow : Window
         _closing = true;
         _clock?.Stop();
         SaveSettings();
+        StopCamera();
         _pollCts.Cancel();
         StopListening();
         _bibSender.Dispose();
@@ -314,6 +323,7 @@ public partial class MainWindow : Window
         }
 
         var added = new List<ReportSection>();
+        var listsChanged = removed.Count > 0;
         var existing = _sections.ToDictionary(section => section.Report.ReportBuilderConfigId);
         foreach (var item in downloaded)
         {
@@ -324,18 +334,23 @@ public partial class MainWindow : Window
                 section.Apply(item.Report, item.Payload);
                 _sections.Add(section);
                 added.Add(section);
+                listsChanged = true;
                 continue;
             }
 
             var scroller = CaptureGridScroll(section);
-            var rowsChanged = section.Apply(item.Report, item.Payload);
-            if (rowsChanged)
-                RestoreGridScroll(scroller);
+            if (!section.Apply(item.Report, item.Payload))
+                continue;
+            listsChanged = true;
+            RestoreGridScroll(scroller);
         }
 
         EmptyStateText.Visibility = _sections.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        LayoutBoard();
+        if (listsChanged || !_haveSnapshot)
+            LayoutBoard();
         RematchReads();
+        if (listsChanged || !_haveSnapshot)
+            PublishJumbotron();
         _lastPoll = DateTime.Now;
         PaintLink(true, _automatic
             ? "Last poll"
@@ -687,29 +702,36 @@ public partial class MainWindow : Window
 
         if (_settingsUi != null)
         {
+            _settings.JumbotronHost = _settingsUi.JumboHostBox.Text.Trim();
             if (!int.TryParse(_settingsUi.SendPortBox.Text.Trim(), out var typed) || typed is < 1 or > 65535)
             {
                 _bibSender.Stop();
-                SetSendStatus("Display port must be a number from 1 to 65535.");
+                SetSendStatus("Jumbotron port must be a number from 1 to 65535.");
                 return;
             }
             _settings.SendPort = typed;
         }
 
-        if (_settings.SendPort is < 1 or > 65535)
+        if (string.IsNullOrWhiteSpace(_settings.JumbotronHost))
         {
             _bibSender.Stop();
-            SetSendStatus("Display port must be a number from 1 to 65535.");
+            SetSendStatus("Enter the jumbotron host.");
             return;
         }
 
-        var port = _settings.SendPort;
+        if (_settings.SendPort is < 1 or > 65535)
+        {
+            _bibSender.Stop();
+            SetSendStatus("Jumbotron port must be a number from 1 to 65535.");
+            return;
+        }
 
-        if (!_bibSender.Start(port, ShowSendStatus))
+        if (!_bibSender.Start(_settings.JumbotronHost, _settings.SendPort, _liveJumbotronMode, ShowSendStatus))
             return;
 
         foreach (var read in _reads.Reverse())
             _bibSender.Publish(read, false);
+        PublishJumbotron();
     }
 
     void PublishRead(BibRead read, bool update)
@@ -898,6 +920,7 @@ public partial class MainWindow : Window
         _theme = AppThemes.Normalize(theme);
         AppThemes.Apply(_theme);
         PaintThemeButtons();
+        PaintModeButtons();
         PaintViewButtons();
         PaintLive();
         PaintLink(ConnectionText.Text.StartsWith("Connected", StringComparison.Ordinal), StatusText.Text);
@@ -998,8 +1021,22 @@ public partial class MainWindow : Window
                 _savedLocationNames = new List<string> { settings.ListenLocation.Trim() };
             _settings.Listen = settings.Listen;
             _settings.SendReads = settings.SendReads ?? true;
+            if (!string.IsNullOrWhiteSpace(settings.JumbotronHost))
+                _settings.JumbotronHost = settings.JumbotronHost.Trim();
             if (settings.SendPort is > 0 and <= 65535)
                 _settings.SendPort = settings.SendPort;
+            _settings.JumbotronMode = JumbotronModes.Normalize(settings.JumbotronMode);
+            _liveJumbotronMode = _settings.JumbotronMode;
+            _settings.EventWelcomeImage = settings.EventWelcomeImage ?? "";
+            _settings.EventWelcomeHint = settings.EventWelcomeHint ?? "";
+            _settings.EventWelcomeUrl = settings.EventWelcomeUrl ?? "";
+            _settings.CameraIp = settings.CameraIp ?? "";
+            _settings.CameraTemplate = string.IsNullOrWhiteSpace(settings.CameraTemplate)
+                ? CameraUrl.DefaultTemplate
+                : settings.CameraTemplate;
+            _settings.CameraAdvanced = settings.CameraAdvanced;
+            _settings.CameraUseExact = settings.CameraUseExact;
+            _settings.CameraExactUrl = settings.CameraExactUrl ?? "";
             _theme = AppThemes.Normalize(settings.Theme);
             _settings.Theme = _theme;
         }
@@ -1016,6 +1053,7 @@ public partial class MainWindow : Window
             CommitInterval();
             PullSettingsFromUi();
             _settings.Theme = _theme;
+            _settings.JumbotronMode = JumbotronModes.Normalize(_settings.JumbotronMode);
             _settings.RefreshSeconds = _refreshSeconds;
             _settings.Automatic = _automatic;
             _settings.SelectedLocations = _locations.Count > 0
@@ -1053,8 +1091,18 @@ public partial class MainWindow : Window
             _settings.ListenPort = listenPort;
         _settings.Listen = ui.ListenBox.IsChecked == true;
         _settings.SendReads = ui.SendReadsBox.IsChecked == true;
+        _settings.JumbotronHost = ui.JumboHostBox.Text.Trim();
         if (int.TryParse(ui.SendPortBox.Text.Trim(), out var sendPort) && sendPort is > 0 and <= 65535)
             _settings.SendPort = sendPort;
+        _settings.EventWelcomeHint = ui.EventHintBox.Text.Trim();
+        _settings.EventWelcomeUrl = ui.EventUrlBox.Text.Trim();
+        _settings.CameraIp = ui.CameraIpBox.Text.Trim();
+        _settings.CameraTemplate = string.IsNullOrWhiteSpace(ui.CameraTemplateBox.Text)
+            ? CameraUrl.DefaultTemplate
+            : ui.CameraTemplateBox.Text.Trim();
+        _settings.CameraAdvanced = ui.CameraAdvancedBox.IsChecked == true;
+        _settings.CameraUseExact = ui.CameraExactBox.IsChecked == true;
+        _settings.CameraExactUrl = ui.CameraUrlBox.Text.Trim();
     }
 
     void EnsureSettings()
@@ -1063,8 +1111,8 @@ public partial class MainWindow : Window
             return;
         _suppressSettings = true;
         var panel = new SettingsPanel { Host = this };
-        ApplySettingsToUi(panel);
         _settingsUi = panel;
+        ApplySettingsToUi(panel);
         SettingsBoard.Content = panel;
         if (_pendingLog.Count > 0)
         {
@@ -1088,8 +1136,355 @@ public partial class MainWindow : Window
         ui.ListenPasswordBox.Text = _settings.ListenPassword ?? "";
         ui.ListenBox.IsChecked = _settings.Listen;
         ui.SendReadsBox.IsChecked = _settings.SendReads ?? true;
+        ui.JumboHostBox.Text = string.IsNullOrWhiteSpace(_settings.JumbotronHost) ? "127.0.0.1" : _settings.JumbotronHost;
         ui.SendPortBox.Text = _settings.SendPort.ToString();
         ui.SendStatusText.Text = _sendStatus;
+        ui.EventGraphicBox.Text = _settings.EventWelcomeImage;
+        ui.EventHintBox.Text = _settings.EventWelcomeHint;
+        ui.EventUrlBox.Text = _settings.EventWelcomeUrl;
+        ui.CameraIpBox.Text = _settings.CameraIp;
+        ui.CameraTemplateBox.Text = string.IsNullOrWhiteSpace(_settings.CameraTemplate)
+            ? CameraUrl.DefaultTemplate
+            : _settings.CameraTemplate;
+        ui.CameraAdvancedBox.IsChecked = _settings.CameraAdvanced;
+        ui.CameraExactBox.IsChecked = _settings.CameraUseExact;
+        ui.CameraUrlBox.Text = _settings.CameraExactUrl;
+        EnsureModeButtons(ui);
+        PaintModeButtons();
+        PaintCameraSettings();
+    }
+
+    void EnsureModeButtons(SettingsPanel ui)
+    {
+        if (ui.ModeButtons.Children.Count > 0)
+            return;
+        foreach (var mode in JumbotronModes.All)
+        {
+            var button = new Button
+            {
+                Content = mode.Label,
+                Tag = mode.Id,
+                Style = (Style)FindResource("PillButton"),
+                ToolTip = mode.Detail,
+                Margin = new Thickness(0, 0, 8, 8)
+            };
+            button.Click += (_, _) => SetJumbotronMode((string)button.Tag, persist: true);
+            ui.ModeButtons.Children.Add(button);
+        }
+    }
+
+    void SetJumbotronMode(string mode, bool persist)
+    {
+        var id = JumbotronModes.Normalize(mode);
+        var liveChanged = _liveJumbotronMode != id;
+        var defaultChanged = persist && _settings.JumbotronMode != id;
+        _liveJumbotronMode = id;
+        if (persist)
+            _settings.JumbotronMode = id;
+        PaintModeButtons();
+        PaintLiveModeBox();
+        SetSendStatus(_sendStatus);
+        if (defaultChanged)
+            SaveSettings();
+        if (liveChanged)
+        {
+            _bibSender.SetMode(id);
+            PublishJumbotron();
+            Log(persist
+                ? "Jumbotron default mode is now " + JumbotronModes.LabelOf(id) + "."
+                : "Jumbotron mode is now " + JumbotronModes.LabelOf(id) + " for this session.");
+            return;
+        }
+
+        if (defaultChanged)
+            Log("Jumbotron default mode is now " + JumbotronModes.LabelOf(id) + ".");
+    }
+
+    void FillJumboModeBox()
+    {
+        if (JumboModeBox == null)
+            return;
+        JumboModeBox.ItemsSource = JumbotronModes.All;
+        PaintLiveModeBox();
+    }
+
+    void PaintLiveModeBox()
+    {
+        if (JumboModeBox == null)
+            return;
+        _suppressJumboMode = true;
+        JumboModeBox.SelectedValue = JumbotronModes.Normalize(_liveJumbotronMode);
+        _suppressJumboMode = false;
+    }
+
+    void JumboModeBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_suppressJumboMode || JumboModeBox.SelectedValue is not string id)
+            return;
+        SetJumbotronMode(id, persist: false);
+    }
+
+    internal void BrowseEventGraphicButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Event welcome graphic",
+            Filter = "Images|*.png;*.jpg;*.jpeg;*.bmp|All files|*.*",
+            FileName = _settings.EventWelcomeImage
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+        _settings.EventWelcomeImage = dialog.FileName;
+        if (_settingsUi != null)
+            _settingsUi.EventGraphicBox.Text = dialog.FileName;
+        SaveSettings();
+        PublishJumbotron();
+        Log("Event welcome graphic is " + Path.GetFileName(dialog.FileName) + ".");
+    }
+
+    internal void ClearEventGraphicButton_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.EventWelcomeImage = "";
+        if (_settingsUi != null)
+            _settingsUi.EventGraphicBox.Text = "";
+        SaveSettings();
+        PublishJumbotron();
+        Log("Event welcome graphic cleared.");
+    }
+
+    internal void EventWelcome_LostFocus(object sender, RoutedEventArgs e)
+    {
+        SaveSettings();
+        PublishJumbotron();
+    }
+
+    internal void Camera_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_suppressSettings)
+            return;
+        SaveSettings();
+        PaintCameraSettings();
+        ApplyCamera();
+    }
+
+    internal void CameraAdvanced_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressSettings || _settingsUi == null)
+            return;
+        _settings.CameraAdvanced = _settingsUi.CameraAdvancedBox.IsChecked == true;
+        PaintCameraSettings();
+        SaveSettings();
+    }
+
+    internal void CameraExact_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_suppressSettings || _settingsUi == null)
+            return;
+        _settings.CameraUseExact = _settingsUi.CameraExactBox.IsChecked == true;
+        SaveSettings();
+        PaintCameraSettings();
+        ApplyCamera();
+    }
+
+    void PaintCameraSettings()
+    {
+        if (_settingsUi == null)
+            return;
+        _settingsUi.CameraAdvancedPanel.Visibility = _settings.CameraAdvanced ? Visibility.Visible : Visibility.Collapsed;
+        var exact = _settings.CameraAdvanced && _settings.CameraUseExact;
+        _settingsUi.CameraIpBox.IsEnabled = !exact;
+        _settingsUi.CameraTemplateBox.IsEnabled = !exact;
+        _settingsUi.CameraUrlBox.IsEnabled = exact;
+        var url = CameraUrl.Resolve(_settings);
+        _settingsUi.CameraBuiltUrlText.Text = url.Length == 0
+            ? (_settings.CameraUseExact
+                ? "Enter an exact RTSP URL."
+                : "Enter a camera IP to build the RTSP URL.")
+            : CameraUrl.Redact(url);
+    }
+
+    void ApplyCamera()
+    {
+        if (_closing || CameraHintText == null)
+            return;
+        var url = CameraUrl.Resolve(_settings);
+        if (url.Length == 0)
+        {
+            StopCameraPlayback();
+            CameraHintText.Text = "Set a camera IP in Settings.";
+            CameraHintText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        if (url == _openCameraUrl)
+            return;
+
+        if (!EnsureCameraPlayer())
+            return;
+
+        try
+        {
+            using var media = new Media(_libVlc!, url, FromType.FromLocation);
+            _cameraPlayer!.Play(media);
+            _openCameraUrl = url;
+            CameraHintText.Visibility = Visibility.Collapsed;
+            Log("Camera opening " + CameraUrl.Redact(url) + ".");
+        }
+        catch (Exception ex)
+        {
+            CameraHintText.Text = "Camera failed. " + ex.Message;
+            CameraHintText.Visibility = Visibility.Visible;
+            Log("Camera failed. " + ex.Message);
+        }
+    }
+
+    bool EnsureCameraPlayer()
+    {
+        if (_cameraPlayer != null)
+            return true;
+        try
+        {
+            Core.Initialize();
+            _libVlc = new LibVLC("--network-caching=300", "--rtsp-tcp", "--quiet");
+            _cameraPlayer = new LibVLCSharp.Shared.MediaPlayer(_libVlc);
+            _cameraPlayer.EncounteredError += (_, _) => Dispatcher.BeginInvoke(() =>
+            {
+                if (_closing)
+                    return;
+                CameraHintText.Text = "Camera stream failed. Check the RTSP URL.";
+                CameraHintText.Visibility = Visibility.Visible;
+            });
+            CameraView.MediaPlayer = _cameraPlayer;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            CameraHintText.Text = "Camera player failed to start. " + ex.Message;
+            CameraHintText.Visibility = Visibility.Visible;
+            Log("Camera player failed to start. " + ex.Message);
+            return false;
+        }
+    }
+
+    void StopCameraPlayback()
+    {
+        _openCameraUrl = "";
+        try
+        {
+            _cameraPlayer?.Stop();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    void StopCamera()
+    {
+        StopCameraPlayback();
+        if (CameraView != null)
+            CameraView.MediaPlayer = null;
+        try
+        {
+            _cameraPlayer?.Dispose();
+        }
+        catch (Exception)
+        {
+        }
+        try
+        {
+            _libVlc?.Dispose();
+        }
+        catch (Exception)
+        {
+        }
+        _cameraPlayer = null;
+        _libVlc = null;
+    }
+
+    void PublishJumbotron()
+    {
+        if (!(_settings.SendReads ?? true))
+            return;
+        _bibSender.SetWelcome(BuildWelcome());
+        _bibSender.SetEventWelcome(BuildEventWelcome());
+        _bibSender.SetBoard(JumbotronBoard.Build(_index, _race));
+    }
+
+    JumbotronWelcome BuildWelcome()
+    {
+        var info = _race?.Race;
+        var title = string.IsNullOrWhiteSpace(info?.Name) ? "Welcome" : info!.Name!.Trim();
+        var parts = new List<string>();
+        var start = FormatRaceDay(info?.StartDate);
+        if (start != "—")
+            parts.Add(start);
+        var course = DescribeCourse(_race?.Events);
+        if (course.Length > 0 && course != "Distance not set")
+            parts.Add(course);
+        return new JumbotronWelcome
+        {
+            Title = title,
+            Detail = parts.Count == 0 ? "Race day" : string.Join("  ·  ", parts)
+        };
+    }
+
+    JumbotronEventWelcome BuildEventWelcome()
+    {
+        var info = _race?.Race;
+        var image = JumbotronImage.Encode(_settings.EventWelcomeImage);
+        return new JumbotronEventWelcome
+        {
+            Title = string.IsNullOrWhiteSpace(info?.Name) ? "Event welcome" : info!.Name!.Trim(),
+            Start = FormatRaceStart(info?.StartDate),
+            Events = DescribeEvents(_race?.Events),
+            Hint = _settings.EventWelcomeHint.Trim(),
+            ResultsUrl = _settings.EventWelcomeUrl.Trim(),
+            ImageMime = image.Mime,
+            Image = image.Data
+        };
+    }
+
+    static string FormatRaceStart(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+        if (!DateTime.TryParse(value, out var when))
+            return value.Trim();
+        return when.TimeOfDay == TimeSpan.Zero
+            ? when.ToString("MMMM d, yyyy")
+            : when.ToString("MMMM d, yyyy  h:mm tt");
+    }
+
+    static string DescribeEvents(List<RaceEvent>? events)
+    {
+        var names = (events ?? new())
+            .Where(item => !item.Hidden)
+            .Select(item =>
+            {
+                if (!string.IsNullOrWhiteSpace(item.Name) && !string.IsNullOrWhiteSpace(item.Distance)
+                    && !item.Name.Contains(item.Distance, StringComparison.OrdinalIgnoreCase))
+                    return item.Name.Trim() + " " + item.Distance.Trim();
+                if (!string.IsNullOrWhiteSpace(item.Name))
+                    return item.Name.Trim();
+                return item.Distance?.Trim() ?? "";
+            })
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return string.Join("   ·   ", names);
+    }
+
+    void PaintModeButtons()
+    {
+        if (_settingsUi == null)
+            return;
+        var selected = JumbotronModes.Normalize(_settings.JumbotronMode);
+        foreach (var child in _settingsUi.ModeButtons.Children)
+        {
+            if (child is not Button button || button.Tag is not string id)
+                continue;
+            PaintThemeButton(button, id == selected);
+        }
     }
 
     void EnsureGridChrome()
@@ -1154,21 +1549,33 @@ public partial class MainWindow : Window
     void SetSendStatus(string status)
     {
         _sendStatus = status;
-        _displayCount = 0;
-        var first = status.Split(' ', 2)[0];
-        if (int.TryParse(first, out var count))
-            _displayCount = count;
+        var connected = status.StartsWith("Connected", StringComparison.OrdinalIgnoreCase);
+        _displayCount = connected ? 1 : 0;
         if (_settingsUi != null)
             _settingsUi.SendStatusText.Text = status;
         if (JumboDetailText == null)
             return;
-        var connected = status.Contains("connected", StringComparison.OrdinalIgnoreCase)
-            && !status.StartsWith("Waiting", StringComparison.Ordinal);
-        JumboStateText.Text = connected ? "Connected" : "Waiting";
+        var mode = JumbotronModes.LabelOf(_liveJumbotronMode);
+        JumboStateText.Text = connected ? "Connected · " + mode : "Waiting · " + mode;
         JumboDot.Fill = (Brush)FindResource(connected ? "GoodBrush" : "WarnBrush");
-        JumboDetailText.Text = status;
-        PreviewText.Text = connected ? status : "No display client connected.";
+        JumboDetailText.Text = CompactSendStatus(status);
+        JumboDetailText.ToolTip = status;
+        PreviewText.Text = connected ? mode + ". " + CompactSendStatus(status) : "Not connected to the jumbotron. Mode is " + mode + ".";
+        PreviewText.ToolTip = status;
         PaintStats();
+    }
+
+    static string CompactSendStatus(string status)
+    {
+        if (status.StartsWith("Jumbotron connection failed", StringComparison.OrdinalIgnoreCase))
+        {
+            var retry = status.LastIndexOf("Retrying ", StringComparison.Ordinal);
+            return retry >= 0
+                ? "Cannot reach the jumbotron. " + status[retry..]
+                : "Cannot reach the jumbotron.";
+        }
+
+        return status;
     }
 
     void StartClock()

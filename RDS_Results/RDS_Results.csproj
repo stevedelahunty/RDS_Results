@@ -15,4 +15,9 @@
     <Resource Include="banner.png" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="LibVLCSharp.WPF" Version="3.9.3" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
+  </ItemGroup>
+
 </Project>

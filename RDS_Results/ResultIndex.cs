@@ -27,6 +27,8 @@ public sealed class ResultIndex
 
     ResultIndex(List<AthleteRow> rows) => _rows = rows;
 
+    public IReadOnlyList<AthleteRow> Rows => _rows;
+
     public static ResultIndex Build(IEnumerable<ReportSection> sections)
     {
         var rows = new List<AthleteRow>();

@@ -37,4 +37,16 @@ public partial class SettingsPanel : UserControl
     void SendReadsBox_Changed(object sender, RoutedEventArgs e) => Host!.SendReadsBox_Changed(sender, e);
 
     void SendPortBox_LostFocus(object sender, RoutedEventArgs e) => Host!.SendPortBox_LostFocus(sender, e);
+
+    void BrowseEventGraphicButton_Click(object sender, RoutedEventArgs e) => Host!.BrowseEventGraphicButton_Click(sender, e);
+
+    void ClearEventGraphicButton_Click(object sender, RoutedEventArgs e) => Host!.ClearEventGraphicButton_Click(sender, e);
+
+    void EventWelcome_LostFocus(object sender, RoutedEventArgs e) => Host!.EventWelcome_LostFocus(sender, e);
+
+    void Camera_LostFocus(object sender, RoutedEventArgs e) => Host!.Camera_LostFocus(sender, e);
+
+    void CameraAdvanced_Changed(object sender, RoutedEventArgs e) => Host!.CameraAdvanced_Changed(sender, e);
+
+    void CameraExact_Changed(object sender, RoutedEventArgs e) => Host!.CameraExact_Changed(sender, e);
 }

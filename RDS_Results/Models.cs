@@ -275,7 +275,17 @@ public sealed class AppSettings
     public List<string>? SelectedLocations { get; set; }
     public bool Listen { get; set; } = true;
     public bool? SendReads { get; set; }
+    public string JumbotronHost { get; set; } = "127.0.0.1";
     public int SendPort { get; set; } = 9100;
+    public string JumbotronMode { get; set; } = JumbotronModes.BibReads;
+    public string EventWelcomeImage { get; set; } = "";
+    public string EventWelcomeHint { get; set; } = "";
+    public string EventWelcomeUrl { get; set; } = "";
+    public string CameraIp { get; set; } = "";
+    public string CameraTemplate { get; set; } = CameraUrl.DefaultTemplate;
+    public bool CameraAdvanced { get; set; }
+    public bool CameraUseExact { get; set; }
+    public string CameraExactUrl { get; set; } = "";
 }
 
 public sealed class LocationChoice : INotifyPropertyChanged
@@ -578,9 +588,11 @@ public sealed class ReportSection : INotifyPropertyChanged
 
     public bool Apply(ReportMetadata report, ReportPayload payload)
     {
+        var signature = SignatureOf(report, payload.Data);
+        if (signature == Signature && Signature.Length > 0)
+            return false;
+
         var kind = ReportKinds.FromName(report.Name);
-        var signature = SignatureOf(report, payload.RawJson);
-        var rowsChanged = signature != Signature;
         Report = report;
         Kind = kind;
         Payload = payload;
@@ -593,16 +605,37 @@ public sealed class ReportSection : INotifyPropertyChanged
         Summary = rows == 0
             ? "No finishers yet"
             : $"{rows} results · updated {stamp}";
-        if (rowsChanged)
-            Rows = LocalResultWriter.BuildTable(report, payload.Data);
-        return rowsChanged;
+        Rows = LocalResultWriter.BuildTable(report, payload.Data);
+        return true;
     }
 
-    static string SignatureOf(ReportMetadata report, string rawJson)
+    static string SignatureOf(ReportMetadata report, ReportData data)
     {
         var fields = report.Fields ?? new();
-        var fieldKey = string.Join("|", fields.Select(field => field.ColumnId + "\u001f" + field.Name));
-        return fieldKey + "\n" + rawJson;
+        var rows = data.Results ?? new();
+        var builder = new System.Text.StringBuilder(256 + rows.Count * 64);
+        builder.Append(report.ReportBuilderConfigId);
+        builder.Append('\n');
+        foreach (var field in fields)
+        {
+            builder.Append(field.ColumnId);
+            builder.Append('\u001f');
+            builder.Append(field.Name);
+            builder.Append('\u001e');
+        }
+
+        foreach (var row in rows)
+        {
+            builder.Append('\n');
+            for (var i = 0; i < row.Count; i++)
+            {
+                if (i > 0)
+                    builder.Append('\u001f');
+                builder.Append(LocalResultWriter.FormatCell(row[i]));
+            }
+        }
+
+        return builder.ToString();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

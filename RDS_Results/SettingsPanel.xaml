@@ -80,27 +80,101 @@
             </StackPanel>
         </Border>
 
-        <TextBlock Text="Bib reads" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <TextBlock Text="Jumbotron" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
         <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
             <StackPanel>
                 <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,10"
-                           Text="Choose where each bib read goes. A display client connects to this computer and shows the reads. That client is the stand-in for the jumbotron. The message format is SendBibReads.md."/>
+                           Text="RDS Results connects out to the jumbotron. The default mode chosen here is saved and returns after a restart. The Results screen can switch the jumbotron for this session only. Welcome is the splash screen. Event welcome sends a custom graphic plus the race name, start, and how to view results. Scrolling results walks each set, men then women."/>
+                <TextBlock Text="Default mode" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,6"/>
+                <WrapPanel x:Name="ModeButtons" x:FieldModifier="internal" Margin="0,0,0,10"/>
+                <TextBlock Text="Event welcome graphic" Foreground="{DynamicResource MutedBrush}"/>
+                <DockPanel Margin="0,4,0,8">
+                    <Button DockPanel.Dock="Right" Content="Clear" Margin="8,0,0,0" Click="ClearEventGraphicButton_Click"/>
+                    <Button DockPanel.Dock="Right" Content="Browse" Margin="8,0,0,0" Click="BrowseEventGraphicButton_Click"/>
+                    <TextBox x:Name="EventGraphicBox" x:FieldModifier="internal" VerticalContentAlignment="Center"
+                             IsReadOnly="True"
+                             ToolTip="Background graphic sent to the jumbotron in Event welcome mode."/>
+                </DockPanel>
+                <WrapPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="How to view results" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="EventHintBox" x:FieldModifier="internal" Width="320" Margin="0,4,0,0"
+                                 ToolTip="Short line on the event welcome screen. A QR code can live in the graphic."
+                                 LostFocus="EventWelcome_LostFocus"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Results URL" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="EventUrlBox" x:FieldModifier="internal" Width="260" Margin="0,4,0,0"
+                                 ToolTip="Shown on the event welcome screen. Put a QR code in the graphic if you want one."
+                                 LostFocus="EventWelcome_LostFocus"/>
+                    </StackPanel>
+                </WrapPanel>
                 <WrapPanel>
                     <CheckBox x:Name="SendReadsBox" x:FieldModifier="internal"
-                              Content="Send bib reads to a display client"
+                              Content="Send to the jumbotron"
                               Margin="0,8,16,8"
                               Checked="SendReadsBox_Changed"
                               Unchecked="SendReadsBox_Changed"/>
                     <StackPanel Margin="0,0,12,8">
-                        <TextBlock Text="Display port" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBlock Text="Jumbotron host" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="JumboHostBox" x:FieldModifier="internal" Width="180" Margin="0,4,0,0"
+                                 ToolTip="IP or name of the jumbotron. RDS Results connects out to this address."
+                                 LostFocus="SendPortBox_LostFocus"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Jumbotron port" Foreground="{DynamicResource MutedBrush}"/>
                         <TextBox x:Name="SendPortBox" x:FieldModifier="internal" Width="90" Margin="0,4,0,0"
-                                 ToolTip="TCP port display clients connect to."
+                                 ToolTip="Port the jumbotron is listening on."
                                  LostFocus="SendPortBox_LostFocus"/>
                     </StackPanel>
                 </WrapPanel>
                 <TextBlock x:Name="SendStatusText" x:FieldModifier="internal"
                            TextWrapping="Wrap"
                            Foreground="{DynamicResource MutedBrush}"/>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="Camera" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,10"
+                           Text="These cameras share one RTSP pattern. Enter the camera IP and the URL is built for you. Advanced can set the pattern or a full URL."/>
+                <WrapPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Camera IP" Foreground="{DynamicResource MutedBrush}"/>
+                        <TextBox x:Name="CameraIpBox" x:FieldModifier="internal" Width="180" Margin="0,4,0,0"
+                                 ToolTip="Only the IP changes from camera to camera. The RTSP URL is built from the template."
+                                 LostFocus="Camera_LostFocus"/>
+                    </StackPanel>
+                    <CheckBox x:Name="CameraAdvancedBox" x:FieldModifier="internal"
+                              Content="Advanced"
+                              Margin="0,22,12,8"
+                              Checked="CameraAdvanced_Changed"
+                              Unchecked="CameraAdvanced_Changed"/>
+                </WrapPanel>
+                <TextBlock Text="URL" Foreground="{DynamicResource MutedBrush}"/>
+                <TextBlock x:Name="CameraBuiltUrlText" x:FieldModifier="internal"
+                           Margin="0,4,0,8"
+                           FontFamily="Consolas"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource MutedBrush}"
+                           Text="Enter a camera IP to build the RTSP URL."/>
+                <StackPanel x:Name="CameraAdvancedPanel" x:FieldModifier="internal" Visibility="Collapsed">
+                    <TextBlock Text="URL template" Foreground="{DynamicResource MutedBrush}"/>
+                    <TextBox x:Name="CameraTemplateBox" x:FieldModifier="internal" Margin="0,4,0,8"
+                             ToolTip="Use {ip} where the camera address goes. This is how the URL is built when Exact URL is off."
+                             LostFocus="Camera_LostFocus"/>
+                    <CheckBox x:Name="CameraExactBox" x:FieldModifier="internal"
+                              Content="Use an exact URL"
+                              Margin="0,0,0,8"
+                              Checked="CameraExact_Changed"
+                              Unchecked="CameraExact_Changed"/>
+                    <TextBlock Text="Exact URL" Foreground="{DynamicResource MutedBrush}"/>
+                    <TextBox x:Name="CameraUrlBox" x:FieldModifier="internal" Margin="0,4,0,0"
+                             ToolTip="Full RTSP URL. Used only when Exact URL is checked."
+                             LostFocus="Camera_LostFocus"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 

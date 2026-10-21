@@ -1,5 +1,4 @@
 using System.IO;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -17,24 +16,25 @@ public sealed class BibSender : IDisposable
     readonly List<int> _order = new();
     readonly List<ClientSlot> _clients = new();
 
-    TcpListener? _listener;
     CancellationTokenSource? _cts;
     bool _running;
+    string _host = "127.0.0.1";
     int _port;
     int _generation;
+    string _mode = JumbotronModes.BibReads;
+    string? _welcomeJson;
+    string? _eventWelcomeJson;
+    string? _boardJson;
 
     public void Stop()
     {
         CancellationTokenSource? cts;
-        TcpListener? listener;
         List<ClientSlot> slots;
         lock (_gate)
         {
             _running = false;
             cts = _cts;
             _cts = null;
-            listener = _listener;
-            _listener = null;
             slots = _clients.ToList();
             _clients.Clear();
             _order.Clear();
@@ -49,34 +49,24 @@ public sealed class BibSender : IDisposable
         {
         }
 
-        try
-        {
-            listener?.Stop();
-        }
-        catch (SocketException)
-        {
-        }
-
         foreach (var slot in slots)
             slot.Outbox.Writer.TryComplete();
 
         cts?.Dispose();
     }
 
-    public bool Start(int port, Action<string> onStatus)
+    public bool Start(string host, int port, string mode, Action<string> onStatus)
     {
         Stop();
-        TcpListener listener;
-        try
+        var connectHost = ConnectAddress.Host(host);
+        if (connectHost.Length == 0)
         {
-            listener = Listen(port);
+            onStatus("Enter the jumbotron host.");
+            return false;
         }
-        catch (Exception ex)
+        if (port is < 1 or > 65535)
         {
-            var busy = ex is SocketException socket && socket.SocketErrorCode == SocketError.AddressAlreadyInUse;
-            onStatus(busy
-                ? $"Display port {port} is already in use."
-                : $"Display listener failed. {ex.Message}");
+            onStatus("Jumbotron port must be a number from 1 to 65535.");
             return false;
         }
 
@@ -84,18 +74,47 @@ public sealed class BibSender : IDisposable
         int generation;
         lock (_gate)
         {
-            _listener = listener;
             _cts = cts;
+            _host = connectHost;
             _port = port;
+            _mode = JumbotronModes.Normalize(mode);
             _running = true;
             generation = ++_generation;
         }
 
-        onStatus(Describe(0, port));
-        _ = Task.Run(() => AcceptLoopAsync(listener, generation, onStatus, cts.Token));
+        onStatus(Describe(0, connectHost, port));
+        _ = Task.Run(() => ConnectLoopAsync(connectHost, port, generation, onStatus, cts.Token));
         _ = Task.Run(() => PingLoopAsync(cts.Token));
         return true;
     }
+
+    public void SetMode(string mode)
+    {
+        var id = JumbotronModes.Normalize(mode);
+        List<ClientSlot> slots;
+        lock (_gate)
+        {
+            if (_mode == id)
+                return;
+            _mode = id;
+            if (!_running)
+                return;
+            slots = _clients.ToList();
+        }
+
+        var line = FormatMode(id);
+        foreach (var slot in slots)
+            slot.Outbox.Writer.TryWrite(line);
+    }
+
+    public void SetWelcome(JumbotronWelcome welcome) =>
+        ReplaceStage(ref _welcomeJson, FormatWelcome(welcome));
+
+    public void SetEventWelcome(JumbotronEventWelcome welcome) =>
+        ReplaceStage(ref _eventWelcomeJson, FormatEventWelcome(welcome));
+
+    public void SetBoard(IReadOnlyList<JumbotronBoardPage> pages) =>
+        ReplaceStage(ref _boardJson, FormatBoard(pages));
 
     public void Publish(BibRead read, bool update)
     {
@@ -127,60 +146,39 @@ public sealed class BibSender : IDisposable
 
     public void Dispose() => Stop();
 
-    static TcpListener Listen(int port)
+    async Task ConnectLoopAsync(string host, int port, int generation, Action<string> onStatus, CancellationToken cancellationToken)
     {
-        var dual = new TcpListener(IPAddress.IPv6Any, port);
-        try
-        {
-            dual.Server.DualMode = true;
-            dual.Start();
-            return dual;
-        }
-        catch (Exception)
+        while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                dual.Stop();
-            }
-            catch (Exception)
-            {
-            }
-
-            var listener = new TcpListener(IPAddress.Any, port);
-            listener.Start();
-            return listener;
-        }
-    }
-
-    async Task AcceptLoopAsync(TcpListener listener, int generation, Action<string> onStatus, CancellationToken cancellationToken)
-    {
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                TcpClient client;
-                try
-                {
-                    client = await listener.AcceptTcpClientAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception) when (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-
+                onStatus(Describe(0, host, port));
+                using var client = new TcpClient();
+                await client.ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
                 client.NoDelay = true;
-                _ = Task.Run(() => RunClientAsync(client, generation, onStatus, cancellationToken));
+                await RunSessionAsync(client, generation, onStatus, cancellationToken).ConfigureAwait(false);
             }
-        }
-        catch (ObjectDisposedException)
-        {
-        }
-        catch (SocketException) when (cancellationToken.IsCancellationRequested)
-        {
+            catch (Exception) when (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                onStatus($"Jumbotron connection failed. {ex.Message} Retrying {host}:{port}.");
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
         }
     }
 
-    async Task RunClientAsync(TcpClient client, int generation, Action<string> onStatus, CancellationToken cancellationToken)
+    async Task RunSessionAsync(TcpClient client, int generation, Action<string> onStatus, CancellationToken cancellationToken)
     {
         var slot = new ClientSlot();
         using (client)
@@ -191,13 +189,19 @@ public sealed class BibSender : IDisposable
                 if (!_running || generation != _generation)
                     return;
                 _clients.Add(slot);
-                slot.Outbox.Writer.TryWrite(HelloJson);
+                slot.Outbox.Writer.TryWrite(FormatHello(_mode));
+                if (_welcomeJson != null)
+                    slot.Outbox.Writer.TryWrite(_welcomeJson);
+                if (_eventWelcomeJson != null)
+                    slot.Outbox.Writer.TryWrite(_eventWelcomeJson);
+                if (_boardJson != null)
+                    slot.Outbox.Writer.TryWrite(_boardJson);
                 foreach (var id in _order)
                     slot.Outbox.Writer.TryWrite(_byId[id]);
                 count = _clients.Count;
             }
 
-            onStatus(Describe(count, _port));
+            onStatus(Describe(count, _host, _port));
 
             try
             {
@@ -230,14 +234,14 @@ public sealed class BibSender : IDisposable
 
                 slot.Outbox.Writer.TryComplete();
                 if (current)
-                    onStatus(Describe(remaining, _port));
+                    onStatus(Describe(remaining, _host, _port));
             }
         }
     }
 
     static async Task PumpAsync(TcpClient client, ClientSlot slot, CancellationToken cancellationToken)
     {
-        await using var writer = new StreamWriter(client.GetStream(), new UTF8Encoding(false), leaveOpen: true)
+        await using var writer = new StreamWriter(client.GetStream(), new UTF8Encoding(false), bufferSize: 64 * 1024, leaveOpen: true)
         {
             AutoFlush = true,
             NewLine = "\n"
@@ -276,12 +280,9 @@ public sealed class BibSender : IDisposable
         }
     }
 
-    static string Describe(int count, int port) => count switch
-    {
-        0 => $"Waiting for a display on port {port}.",
-        1 => $"1 display connected on port {port}.",
-        _ => $"{count} displays connected on port {port}."
-    };
+    static string Describe(int count, string host, int port) => count == 0
+        ? $"Connecting to {host}:{port}."
+        : $"Connected to {host}:{port}.";
 
     static string FormatRead(BibRead read, bool update) => JsonSerializer.Serialize(new WireRead
     {
@@ -309,7 +310,61 @@ public sealed class BibSender : IDisposable
         Message = read.Message
     });
 
-    static readonly string HelloJson = JsonSerializer.Serialize(new WireHello());
+    void ReplaceStage(ref string? stored, string next)
+    {
+        List<ClientSlot> slots;
+        lock (_gate)
+        {
+            if (stored == next)
+                return;
+            stored = next;
+            if (!_running)
+                return;
+            slots = _clients.ToList();
+        }
+
+        foreach (var slot in slots)
+            slot.Outbox.Writer.TryWrite(next);
+    }
+
+    static string FormatHello(string mode) => JsonSerializer.Serialize(new WireHello { Mode = mode });
+
+    static string FormatMode(string mode) => JsonSerializer.Serialize(new WireMode { Mode = mode });
+
+    static string FormatWelcome(JumbotronWelcome welcome) => JsonSerializer.Serialize(new WireWelcome
+    {
+        Title = welcome.Title,
+        Detail = welcome.Detail
+    });
+
+    static string FormatEventWelcome(JumbotronEventWelcome welcome) => JsonSerializer.Serialize(new WireEventWelcome
+    {
+        Title = welcome.Title,
+        Start = welcome.Start,
+        Events = welcome.Events,
+        Hint = welcome.Hint,
+        ResultsUrl = welcome.ResultsUrl,
+        ImageMime = welcome.ImageMime,
+        Image = welcome.Image
+    });
+
+    static string FormatBoard(IReadOnlyList<JumbotronBoardPage> pages) => JsonSerializer.Serialize(new WireBoard
+    {
+        Pages = pages.Select(page => new WireBoardPage
+        {
+            Title = page.Title,
+            Rows = page.Rows.Select(row => new WireBoardRow
+            {
+                Place = row.Place,
+                Bib = row.Bib,
+                Name = row.Name,
+                FinishTime = row.FinishTime,
+                Pace = row.Pace,
+                City = row.City
+            }).ToList()
+        }).ToList()
+    });
+
     static readonly string PingJson = JsonSerializer.Serialize(new WirePing());
 
     sealed class ClientSlot
@@ -326,12 +381,64 @@ public sealed class BibSender : IDisposable
         [JsonPropertyName("v")] public int V { get; init; } = 1;
         [JsonPropertyName("ty")] public string Ty { get; init; } = "hello";
         [JsonPropertyName("app")] public string App { get; init; } = "RDS_Results";
+        [JsonPropertyName("mode")] public string Mode { get; init; } = JumbotronModes.BibReads;
+    }
+
+    sealed class WireMode
+    {
+        [JsonPropertyName("v")] public int V { get; init; } = 1;
+        [JsonPropertyName("ty")] public string Ty { get; init; } = "mode";
+        [JsonPropertyName("mode")] public string Mode { get; init; } = JumbotronModes.BibReads;
     }
 
     sealed class WirePing
     {
         [JsonPropertyName("v")] public int V { get; init; } = 1;
         [JsonPropertyName("ty")] public string Ty { get; init; } = "ping";
+    }
+
+    sealed class WireWelcome
+    {
+        [JsonPropertyName("v")] public int V { get; init; } = 1;
+        [JsonPropertyName("ty")] public string Ty { get; init; } = "welcome";
+        [JsonPropertyName("title")] public string Title { get; init; } = "";
+        [JsonPropertyName("detail")] public string Detail { get; init; } = "";
+    }
+
+    sealed class WireEventWelcome
+    {
+        [JsonPropertyName("v")] public int V { get; init; } = 1;
+        [JsonPropertyName("ty")] public string Ty { get; init; } = "eventWelcome";
+        [JsonPropertyName("title")] public string Title { get; init; } = "";
+        [JsonPropertyName("start")] public string Start { get; init; } = "";
+        [JsonPropertyName("events")] public string Events { get; init; } = "";
+        [JsonPropertyName("hint")] public string Hint { get; init; } = "";
+        [JsonPropertyName("resultsUrl")] public string ResultsUrl { get; init; } = "";
+        [JsonPropertyName("imageMime")] public string ImageMime { get; init; } = "";
+        [JsonPropertyName("image")] public string Image { get; init; } = "";
+    }
+
+    sealed class WireBoard
+    {
+        [JsonPropertyName("v")] public int V { get; init; } = 1;
+        [JsonPropertyName("ty")] public string Ty { get; init; } = "board";
+        [JsonPropertyName("pages")] public List<WireBoardPage> Pages { get; init; } = new();
+    }
+
+    sealed class WireBoardPage
+    {
+        [JsonPropertyName("title")] public string Title { get; init; } = "";
+        [JsonPropertyName("rows")] public List<WireBoardRow> Rows { get; init; } = new();
+    }
+
+    sealed class WireBoardRow
+    {
+        [JsonPropertyName("place")] public string Place { get; init; } = "";
+        [JsonPropertyName("bib")] public string Bib { get; init; } = "";
+        [JsonPropertyName("name")] public string Name { get; init; } = "";
+        [JsonPropertyName("finishTime")] public string FinishTime { get; init; } = "";
+        [JsonPropertyName("pace")] public string Pace { get; init; } = "";
+        [JsonPropertyName("city")] public string City { get; init; } = "";
     }
 
     sealed class WireRead

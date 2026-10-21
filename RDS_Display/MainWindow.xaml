@@ -29,75 +29,196 @@
                            Foreground="{StaticResource MutedBrush}"
                            Text="Starting"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <StackPanel Margin="0,0,12,0">
-                        <TextBlock Text="Host" Foreground="{StaticResource MutedBrush}" FontSize="12"/>
-                        <TextBox x:Name="HostBox" Width="180" Margin="0,4,0,0" Text="127.0.0.1" LostFocus="Endpoint_LostFocus"/>
-                    </StackPanel>
-                    <StackPanel>
-                        <TextBlock Text="Port" Foreground="{StaticResource MutedBrush}" FontSize="12"/>
+                    <StackPanel Margin="0,0,16,0">
+                        <TextBlock Text="Listen port" Foreground="{StaticResource MutedBrush}" FontSize="12"/>
                         <TextBox x:Name="PortBox" Width="90" Margin="0,4,0,0" Text="9100" LostFocus="Endpoint_LostFocus"/>
+                    </StackPanel>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="Mode" Foreground="{StaticResource MutedBrush}" FontSize="12"/>
+                        <TextBlock x:Name="ModeText" Margin="0,4,0,0" FontWeight="SemiBold" Text="Bib reads"/>
                     </StackPanel>
                 </StackPanel>
             </DockPanel>
         </Border>
 
-        <Border DockPanel.Dock="Top"
-                Background="{StaticResource PanelBrush}"
-                BorderBrush="{StaticResource LineBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                Padding="20,16"
-                Margin="0,0,0,12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="FeaturedBib"
-                           Text="—"
-                           FontSize="72"
-                           FontWeight="Bold"
-                           Foreground="{StaticResource AccentBrush}"
-                           VerticalAlignment="Center"
-                           Margin="0,0,24,0"/>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock x:Name="FeaturedName"
-                               Text="Waiting for a bib read."
-                               FontSize="32"
-                               FontWeight="SemiBold"
-                               TextWrapping="Wrap"/>
-                    <TextBlock x:Name="FeaturedDetail"
-                               Margin="0,8,0,0"
-                               FontSize="20"
-                               Foreground="{StaticResource MutedBrush}"
-                               TextWrapping="Wrap"/>
-                </StackPanel>
+        <Grid>
+            <Grid x:Name="WelcomeStage" Visibility="Collapsed">
+                <Image Source="/banner.png" Stretch="UniformToFill"/>
+                <Border VerticalAlignment="Bottom" Background="#99070B10" Padding="36,28">
+                    <StackPanel>
+                        <TextBlock x:Name="WelcomeTitle"
+                                   Text="Welcome"
+                                   FontSize="48"
+                                   FontWeight="Bold"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="WelcomeDetail"
+                                   Margin="0,8,0,0"
+                                   FontSize="22"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="Race day"/>
+                    </StackPanel>
+                </Border>
             </Grid>
-        </Border>
-
-        <DataGrid x:Name="ReadsGrid">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Read" Binding="{Binding ReadTime}" Width="90"/>
-                <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="120"/>
-                <DataGridTextColumn Header="Bib" Binding="{Binding Bib}" Width="80"/>
-                <DataGridTextColumn Header="Chip" Binding="{Binding Chip}" Width="90"/>
-                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200"/>
-                <DataGridTextColumn Header="Finish" Binding="{Binding FinishTime}" Width="110"/>
-                <DataGridTextColumn Header="Place" Binding="{Binding Place}" Width="70"/>
-                <DataGridTextColumn Header="Event" Binding="{Binding EventName}" Width="160"/>
-                <DataGridTextColumn Header="City" Binding="{Binding City}" Width="120"/>
-                <DataGridTextColumn Header="State" Binding="{Binding State}" Width="70"/>
-                <DataGridTextColumn Header="Clock" Binding="{Binding ClockTime}" Width="110"/>
-                <DataGridTextColumn Header="Pace" Binding="{Binding Pace}" Width="80"/>
-                <DataGridTextColumn Header="Division" Binding="{Binding Division}" Width="140"/>
-                <DataGridTextColumn Header="Div place" Binding="{Binding DivisionPlace}" Width="90"/>
-                <DataGridTextColumn Header="Age group" Binding="{Binding AgeGroup}" Width="110"/>
-                <DataGridTextColumn Header="Gender" Binding="{Binding Gender}" Width="80"/>
-                <DataGridTextColumn Header="Age" Binding="{Binding Age}" Width="60"/>
-                <DataGridTextColumn Header="Team" Binding="{Binding Team}" Width="140"/>
-                <DataGridTextColumn Header="Report" Binding="{Binding Report}" Width="180"/>
-                <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="180"/>
-            </DataGrid.Columns>
-        </DataGrid>
+            <Grid x:Name="EventWelcomeStage" Visibility="Collapsed" Background="{StaticResource WindowBrush}">
+                <Image x:Name="EventImage" Stretch="UniformToFill"/>
+                <Border VerticalAlignment="Bottom" Background="#B3070B10" Padding="36,28">
+                    <StackPanel>
+                        <TextBlock x:Name="EventTitle"
+                                   Text="Event welcome"
+                                   FontSize="48"
+                                   FontWeight="Bold"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="EventStart"
+                                   Margin="0,10,0,0"
+                                   FontSize="26"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="EventEvents"
+                                   Margin="0,6,0,0"
+                                   FontSize="20"
+                                   Foreground="{StaticResource MutedBrush}"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="EventHint"
+                                   Margin="0,16,0,0"
+                                   FontSize="22"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="EventUrl"
+                                   Margin="0,6,0,0"
+                                   FontSize="18"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+            <DockPanel x:Name="BoardStage" Visibility="Collapsed">
+                <TextBlock x:Name="BoardTitle"
+                           DockPanel.Dock="Top"
+                           FontSize="36"
+                           FontWeight="Bold"
+                           Margin="8,0,8,12"
+                           Text="Scrolling results"/>
+                <Grid DockPanel.Dock="Top" Margin="8,0,8,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="90"/>
+                        <ColumnDefinition Width="110"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="160"/>
+                        <ColumnDefinition Width="220"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Place" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                    <TextBlock Grid.Column="1" Text="Bib" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                    <TextBlock Grid.Column="2" Text="Name" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                    <TextBlock Grid.Column="3" Text="Finish" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                    <TextBlock Grid.Column="4" Text="City" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
+                </Grid>
+                <ScrollViewer x:Name="BoardScroller"
+                              VerticalScrollBarVisibility="Hidden"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="BoardRows">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="8,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="110"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="160"/>
+                                        <ColumnDefinition Width="220"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Place}" FontSize="28" FontWeight="SemiBold"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Bib}" FontSize="28"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="28" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding FinishTime}" FontSize="28"/>
+                                    <TextBlock Grid.Column="4" Text="{Binding City}" FontSize="22" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+            <DockPanel x:Name="ReadsStage">
+                <Border DockPanel.Dock="Top"
+                        Background="{StaticResource PanelBrush}"
+                        BorderBrush="{StaticResource LineBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="20,16"
+                        Margin="0,0,0,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="FeaturedBib"
+                                   Text="—"
+                                   FontSize="72"
+                                   FontWeight="Bold"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,24,0"/>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock x:Name="FeaturedName"
+                                       Text="Waiting for a bib read."
+                                       FontSize="32"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock x:Name="FeaturedDetail"
+                                       Margin="0,8,0,0"
+                                       FontSize="20"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <DataGrid x:Name="ReadsGrid">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Read" Binding="{Binding ReadTime}" Width="90"/>
+                        <DataGridTextColumn Header="Location" Binding="{Binding Location}" Width="120"/>
+                        <DataGridTextColumn Header="Bib" Binding="{Binding Bib}" Width="80"/>
+                        <DataGridTextColumn Header="Chip" Binding="{Binding Chip}" Width="90"/>
+                        <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200"/>
+                        <DataGridTextColumn Header="Finish" Binding="{Binding FinishTime}" Width="110"/>
+                        <DataGridTextColumn Header="Place" Binding="{Binding Place}" Width="70"/>
+                        <DataGridTextColumn Header="Event" Binding="{Binding EventName}" Width="160"/>
+                        <DataGridTextColumn Header="City" Binding="{Binding City}" Width="120"/>
+                        <DataGridTextColumn Header="State" Binding="{Binding State}" Width="70"/>
+                        <DataGridTextColumn Header="Clock" Binding="{Binding ClockTime}" Width="110"/>
+                        <DataGridTextColumn Header="Pace" Binding="{Binding Pace}" Width="80"/>
+                        <DataGridTextColumn Header="Division" Binding="{Binding Division}" Width="140"/>
+                        <DataGridTextColumn Header="Div place" Binding="{Binding DivisionPlace}" Width="90"/>
+                        <DataGridTextColumn Header="Age group" Binding="{Binding AgeGroup}" Width="110"/>
+                        <DataGridTextColumn Header="Gender" Binding="{Binding Gender}" Width="80"/>
+                        <DataGridTextColumn Header="Age" Binding="{Binding Age}" Width="60"/>
+                        <DataGridTextColumn Header="Team" Binding="{Binding Team}" Width="140"/>
+                        <DataGridTextColumn Header="Report" Binding="{Binding Report}" Width="180"/>
+                        <DataGridTextColumn Header="Message" Binding="{Binding Message}" Width="180"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+            <Border x:Name="ModeStage"
+                    Visibility="Collapsed"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource LineBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="40">
+                    <TextBlock x:Name="ModeTitle"
+                               Text="Welcome"
+                               FontSize="64"
+                               FontWeight="Bold"
+                               Foreground="{StaticResource AccentBrush}"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ModeDetail"
+                               Margin="0,16,0,0"
+                               FontSize="24"
+                               Foreground="{StaticResource MutedBrush}"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="Waiting for the race welcome screen."/>
+                </StackPanel>
+            </Border>
+        </Grid>
     </DockPanel>
 </Window>

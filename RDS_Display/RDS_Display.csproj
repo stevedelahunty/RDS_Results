@@ -10,4 +10,8 @@
     <AssemblyName>RDS_Display</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Resource Include="..\RDS_Results\banner.png" Link="banner.png" />
+  </ItemGroup>
+
 </Project>
