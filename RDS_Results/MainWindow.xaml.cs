@@ -1031,9 +1031,7 @@ public partial class MainWindow : Window
             _settings.EventWelcomeHint = settings.EventWelcomeHint ?? "";
             _settings.EventWelcomeUrl = settings.EventWelcomeUrl ?? "";
             _settings.CameraIp = settings.CameraIp ?? "";
-            _settings.CameraTemplate = string.IsNullOrWhiteSpace(settings.CameraTemplate)
-                ? CameraUrl.DefaultTemplate
-                : settings.CameraTemplate;
+            _settings.CameraTemplate = CameraUrl.NormalizeTemplate(settings.CameraTemplate);
             _settings.CameraAdvanced = settings.CameraAdvanced;
             _settings.CameraUseExact = settings.CameraUseExact;
             _settings.CameraExactUrl = settings.CameraExactUrl ?? "";
@@ -1097,9 +1095,7 @@ public partial class MainWindow : Window
         _settings.EventWelcomeHint = ui.EventHintBox.Text.Trim();
         _settings.EventWelcomeUrl = ui.EventUrlBox.Text.Trim();
         _settings.CameraIp = ui.CameraIpBox.Text.Trim();
-        _settings.CameraTemplate = string.IsNullOrWhiteSpace(ui.CameraTemplateBox.Text)
-            ? CameraUrl.DefaultTemplate
-            : ui.CameraTemplateBox.Text.Trim();
+        _settings.CameraTemplate = CameraUrl.NormalizeTemplate(ui.CameraTemplateBox.Text);
         _settings.CameraAdvanced = ui.CameraAdvancedBox.IsChecked == true;
         _settings.CameraUseExact = ui.CameraExactBox.IsChecked == true;
         _settings.CameraExactUrl = ui.CameraUrlBox.Text.Trim();
@@ -1143,9 +1139,7 @@ public partial class MainWindow : Window
         ui.EventHintBox.Text = _settings.EventWelcomeHint;
         ui.EventUrlBox.Text = _settings.EventWelcomeUrl;
         ui.CameraIpBox.Text = _settings.CameraIp;
-        ui.CameraTemplateBox.Text = string.IsNullOrWhiteSpace(_settings.CameraTemplate)
-            ? CameraUrl.DefaultTemplate
-            : _settings.CameraTemplate;
+        ui.CameraTemplateBox.Text = CameraUrl.NormalizeTemplate(_settings.CameraTemplate);
         ui.CameraAdvancedBox.IsChecked = _settings.CameraAdvanced;
         ui.CameraExactBox.IsChecked = _settings.CameraUseExact;
         ui.CameraUrlBox.Text = _settings.CameraExactUrl;
@@ -1605,6 +1599,7 @@ public partial class MainWindow : Window
 
     void PaintPoll()
     {
+        PaintRaceClock();
         if (PollText == null)
             return;
         if (_lastPoll == null)
@@ -1622,6 +1617,43 @@ public partial class MainWindow : Window
 
         var next = _lastPoll.Value.AddSeconds(_refreshSeconds).ToString("h:mm:ss tt");
         PollText.Text = $"Last RDS poll: {last}  •  Next: {next} ({_refreshSeconds}s)";
+    }
+
+    void PaintRaceClock()
+    {
+        if (RaceClockText == null)
+            return;
+        var now = DateTime.Now;
+        RaceClockText.Text = now.ToString("h:mm:ss tt");
+        if (!TryRaceStart(out var start))
+        {
+            RaceElapsedText.Text = "Start time not set";
+            return;
+        }
+
+        if (now < start)
+        {
+            RaceElapsedText.Text = "Starts " + start.ToString("h:mm tt");
+            return;
+        }
+
+        RaceElapsedText.Text = "Elapsed " + FormatElapsed(now - start);
+    }
+
+    bool TryRaceStart(out DateTime start)
+    {
+        start = default;
+        var value = _race?.Race?.StartDate;
+        if (string.IsNullOrWhiteSpace(value) || !DateTime.TryParse(value, out start))
+            return false;
+        return start.TimeOfDay > TimeSpan.Zero;
+    }
+
+    static string FormatElapsed(TimeSpan span)
+    {
+        if (span.TotalHours >= 1)
+            return $"{(int)span.TotalHours}:{span.Minutes:00}:{span.Seconds:00}";
+        return $"{span.Minutes}:{span.Seconds:00}";
     }
 
     Task UpdateHubBannerAsync(Exception exception)

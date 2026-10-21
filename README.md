@@ -12,13 +12,13 @@ The header is the race at a glance: name and event id, dates, how many reports a
 
 - Destination cards show where results can go. The jumbotron card is live: it reports whether RDS Results is connected out to the jumbotron. iResultsLIVE, the on-site kiosk, and print stay marked “Not set up” until those outputs exist.
 - Each available report is a card. Place, gender, age, and pace appear when the card is wide enough.
-- The bottom row is the camera preview, the system activity log, and event counts. Set a camera IP in Settings. **Clear** empties the activity log.
+- The bottom row is a narrow camera preview, a wide system activity log, and a right pane with event counts plus the current race time. Set a camera IP in Settings. **Clear** empties the activity log.
 
 **Bib reads** lists announcer reads for the timing locations you choose.
 
 **Settings** holds the RaceDay connection, theme, bib listener, jumbotron mode, camera, and display sending.
 
-The camera URL is built from the camera IP and a template (`rtsp://{ip}:554/stream` by default). **Advanced** can change that template or set an exact RTSP URL.
+The camera URL is built from the camera IP and a template (`rtsp://{ip}:554/stream1` by default). **Advanced** can change that template or set an exact RTSP URL.
 
 If RaceDay Scoring refuses the connection, a banner across the top asks you to start the **RaceDay Hub** in RaceDay Scoring. That refusal means the hub is not enabled. The banner goes away on the next successful refresh.
 

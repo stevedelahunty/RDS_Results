@@ -4,7 +4,7 @@ namespace RDS_Results;
 
 public static class CameraUrl
 {
-    public const string DefaultTemplate = "rtsp://{ip}:554/stream";
+    public const string DefaultTemplate = "rtsp://{ip}:554/stream1";
 
     public static string Resolve(AppSettings settings)
     {
@@ -17,12 +17,19 @@ public static class CameraUrl
         var ip = (settings.CameraIp ?? "").Trim();
         if (ip.Length == 0)
             return "";
-        var template = string.IsNullOrWhiteSpace(settings.CameraTemplate)
-            ? DefaultTemplate
-            : settings.CameraTemplate.Trim();
+        var template = NormalizeTemplate(settings.CameraTemplate);
         if (!template.Contains("{ip}", StringComparison.OrdinalIgnoreCase))
             template = DefaultTemplate;
         return template.Replace("{ip}", ip, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string NormalizeTemplate(string? template)
+    {
+        var trimmed = (template ?? "").Trim();
+        if (trimmed.Length == 0 ||
+            trimmed.Equals("rtsp://{ip}:554/stream", StringComparison.OrdinalIgnoreCase))
+            return DefaultTemplate;
+        return trimmed;
     }
 
     public static string Redact(string url)

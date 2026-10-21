@@ -196,19 +196,20 @@
 
                 <Grid DockPanel.Dock="Bottom" Height="210" Margin="0,10,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="1.45*"/>
-                        <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="0.72*"/>
+                        <ColumnDefinition Width="1.8*"/>
+                        <ColumnDefinition Width="0.78*"/>
                     </Grid.ColumnDefinitions>
                     <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,8,0">
                         <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="Jumbotron" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <TextBlock DockPanel.Dock="Top" Text="Camera" FontWeight="SemiBold" Margin="0,0,0,8"/>
                             <TextBlock DockPanel.Dock="Bottom"
                                        x:Name="PreviewText"
                                        Margin="0,8,0,0"
                                        FontSize="11"
                                        Foreground="{DynamicResource MutedBrush}"
-                                       TextWrapping="Wrap"
+                                       TextWrapping="NoWrap"
+                                       TextTrimming="CharacterEllipsis"
                                        Text="No display client connected."/>
                             <Border Background="{DynamicResource InputBrush}" CornerRadius="6" ClipToBounds="True">
                                 <Grid>
@@ -220,7 +221,7 @@
                                                TextAlignment="Center"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
-                                               Margin="16"/>
+                                               Margin="12"/>
                                 </Grid>
                             </Border>
                         </DockPanel>
@@ -249,27 +250,55 @@
                         </DockPanel>
                     </Border>
                     <Border Grid.Column="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="8" Padding="12">
-                        <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="Event Statistics" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                            <UniformGrid Columns="2" Rows="2">
-                                <StackPanel Margin="0,0,8,8">
-                                    <TextBlock x:Name="StatReports" FontSize="22" FontWeight="Bold" Text="0"/>
-                                    <TextBlock Text="Reports" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
-                                </StackPanel>
-                                <StackPanel Margin="0,0,0,8">
-                                    <TextBlock x:Name="StatFinishers" FontSize="22" FontWeight="Bold" Text="0"/>
-                                    <TextBlock Text="Finishers" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
-                                </StackPanel>
-                                <StackPanel Margin="0,0,8,0">
-                                    <TextBlock x:Name="StatDisplays" FontSize="22" FontWeight="Bold" Text="0"/>
-                                    <TextBlock Text="Displays" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
-                                </StackPanel>
-                                <StackPanel>
-                                    <TextBlock x:Name="StatWaiting" FontSize="22" FontWeight="Bold" Text="0"/>
-                                    <TextBlock Text="Waiting" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
-                                </StackPanel>
-                            </UniformGrid>
-                        </DockPanel>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <DockPanel>
+                                <TextBlock DockPanel.Dock="Top" Text="Event statistics" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                                <UniformGrid Columns="2" Rows="2">
+                                    <StackPanel Margin="0,0,8,6">
+                                        <TextBlock x:Name="StatReports" FontSize="20" FontWeight="Bold" Text="0"/>
+                                        <TextBlock Text="Reports" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,0,6">
+                                        <TextBlock x:Name="StatFinishers" FontSize="20" FontWeight="Bold" Text="0"/>
+                                        <TextBlock Text="Finishers" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel Margin="0,0,8,0">
+                                        <TextBlock x:Name="StatDisplays" FontSize="20" FontWeight="Bold" Text="0"/>
+                                        <TextBlock Text="Displays" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                    </StackPanel>
+                                    <StackPanel>
+                                        <TextBlock x:Name="StatWaiting" FontSize="20" FontWeight="Bold" Text="0"/>
+                                        <TextBlock Text="Waiting" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                    </StackPanel>
+                                </UniformGrid>
+                            </DockPanel>
+                            <Border Grid.Row="1" Height="1" Background="{DynamicResource LineBrush}" Margin="0,8"/>
+                            <DockPanel Grid.Row="2">
+                                <TextBlock DockPanel.Dock="Top" Text="Race time" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <TextBlock DockPanel.Dock="Top"
+                                           x:Name="RaceClockText"
+                                           FontSize="26"
+                                           FontWeight="Bold"
+                                           Text="—"/>
+                                <TextBlock DockPanel.Dock="Top"
+                                           x:Name="RaceElapsedText"
+                                           Margin="0,2,0,0"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource MutedBrush}"
+                                           Text="Start time not set"/>
+                                <TextBlock Margin="0,6,0,0"
+                                           FontSize="11"
+                                           VerticalAlignment="Top"
+                                           Foreground="{DynamicResource MutedBrush}"
+                                           TextWrapping="Wrap"
+                                           Text="Clocks will follow this time."/>
+                            </DockPanel>
+                        </Grid>
                     </Border>
                 </Grid>
                 <Grid x:Name="BoardHost" ClipToBounds="True" SizeChanged="BoardScroller_SizeChanged">
