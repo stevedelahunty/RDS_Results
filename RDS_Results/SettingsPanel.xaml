@@ -84,9 +84,22 @@
         <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="6" Padding="12" Margin="0,0,0,12">
             <StackPanel>
                 <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,10"
-                           Text="RDS Results connects out to the jumbotron. The default mode chosen here is saved and returns after a restart. The Results screen can switch the jumbotron for this session only. Welcome is the splash screen. Event welcome sends a custom graphic plus the race name, start, and how to view results. Scrolling results walks each set, men then women."/>
+                           Text="RDS Results connects out to the jumbotron. The default mode chosen here is saved and returns after a restart. The Results screen can switch the jumbotron for this session only. Welcome is the splash screen. Event welcome sends a custom graphic; race start time and the countdown are overlaid in the two standard boxes. Scrolling results walks each report, men then women. Choose that screen's fields on each report. Place and name always show."/>
                 <TextBlock Text="Default mode" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,6"/>
                 <WrapPanel x:Name="ModeButtons" x:FieldModifier="internal" Margin="0,0,0,10"/>
+                <TextBlock Text="Race start time" Foreground="{DynamicResource MutedBrush}"/>
+                <TextBox x:Name="RaceStartBox" x:FieldModifier="internal" Width="160" HorizontalAlignment="Left"
+                         Margin="0,4,0,4"
+                         ToolTip="Gun time shown on Event welcome. Sent with each ping so the jumbotron can count down."
+                         LostFocus="RaceStart_LostFocus"/>
+                <TextBlock Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,0,0,10"
+                           TextWrapping="Wrap"
+                           Text="Example: 7:30 AM. Event welcome graphics keep two empty boxes for this time and the countdown."/>
+                <TextBlock Text="Weather location" Foreground="{DynamicResource MutedBrush}"/>
+                <TextBox x:Name="WeatherBox" x:FieldModifier="internal" Width="220" HorizontalAlignment="Left"
+                         Margin="0,4,0,10"
+                         ToolTip="City used for the weather sent with each ping. Defaults to Londonderry, NH."
+                         LostFocus="Weather_LostFocus"/>
                 <TextBlock Text="Event welcome graphic" Foreground="{DynamicResource MutedBrush}"/>
                 <DockPanel Margin="0,4,0,8">
                     <Button DockPanel.Dock="Right" Content="Clear" Margin="8,0,0,0" Click="ClearEventGraphicButton_Click"/>

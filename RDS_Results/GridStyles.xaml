@@ -86,6 +86,7 @@
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Viewbox Width="18" Height="18" Margin="0,0,8,0" VerticalAlignment="Center">
                         <Path Data="{Binding Mark}" Fill="{Binding Accent}" Stretch="Uniform"/>
@@ -103,7 +104,17 @@
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="NoWrap"/>
                     </StackPanel>
-                    <Border Grid.Column="2"
+                    <Button Grid.Column="2"
+                            Content="Fields"
+                            Margin="8,0,0,0"
+                            Padding="8,2"
+                            FontSize="12"
+                            VerticalAlignment="Center"
+                            Style="{StaticResource PillButton}"
+                            AutomationProperties.AutomationId="ScrollFields"
+                            ToolTip="Fields on the scrolling results screen. Place and name always show."
+                            Click="ScrollFieldsButton_Click"/>
+                    <Border Grid.Column="3"
                             Background="{Binding BadgeBrush}"
                             CornerRadius="8"
                             Padding="8,2"

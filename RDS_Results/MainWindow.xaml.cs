@@ -9,8 +9,6 @@ using System.Windows.Data;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
-using LibVLCSharp.Shared;
-
 namespace RDS_Results;
 
 public partial class MainWindow : Window
@@ -21,6 +19,7 @@ public partial class MainWindow : Window
     readonly LiveSocket _liveSocket = new();
     readonly RaceDayClient _client = new();
     readonly BibSender _bibSender = new();
+    readonly WeatherFeed _weather = new();
     readonly SemaphoreSlim _pollGate = new(1, 1);
     readonly CancellationTokenSource _pollCts = new();
 
@@ -49,13 +48,16 @@ public partial class MainWindow : Window
     readonly AppSettings _settings = new();
     readonly List<string> _pendingLog = new();
     SettingsPanel? _settingsUi;
+    Popup? _scrollPopup;
     DataGrid? _readsGrid;
     bool _gridChrome;
     string _sendStatus = "Bib reads stay on this computer until sending starts.";
+    string _cameraSummary = "Not set";
+    bool _cameraLive;
+    bool _rdsConnected;
     int _displayCount;
     DispatcherTimer? _clock;
-    LibVLC? _libVlc;
-    LibVLCSharp.Shared.MediaPlayer? _cameraPlayer;
+    CameraPreview? _camera;
     string _openCameraUrl = "";
 
     public MainWindow()
@@ -63,6 +65,10 @@ public partial class MainWindow : Window
         LoadSettings();
         AppThemes.Apply(_theme);
         InitializeComponent();
+        _bibSender.Weather = () => _weather.Current;
+        _bibSender.RaceStart = CurrentRaceStart;
+        _weather.SetPlace(_settings.WeatherLocation);
+        _weather.Start();
         ReportSections.ItemsSource = _sections;
         LocationChoices.ItemsSource = _locations;
         FillJumboModeBox();
@@ -114,6 +120,7 @@ public partial class MainWindow : Window
         _pollCts.Cancel();
         StopListening();
         _bibSender.Dispose();
+        _weather.Dispose();
         try
         {
             _pollTask?.Wait(TimeSpan.FromSeconds(3));
@@ -159,6 +166,7 @@ public partial class MainWindow : Window
         _automatic = _settingsUi.AutoRefreshBox.IsChecked == true;
         _settings.Automatic = _automatic;
         PaintLive();
+        PaintStatusBar();
         SaveSettings();
     }
 
@@ -551,6 +559,8 @@ public partial class MainWindow : Window
             DateStartText.Text = "—";
             DateEndText.Text = "";
             EventsText.Text = "Distance loads with the race.";
+            PaintRaceClock();
+            _bibSender.SendPingNow();
             return;
         }
 
@@ -564,6 +574,8 @@ public partial class MainWindow : Window
         DateStartText.Text = FormatRaceDay(info.StartDate);
         DateEndText.Text = FormatRaceDay(info.EndDate);
         EventsText.Text = DescribeCourse(race.Events);
+        PaintRaceClock();
+        _bibSender.SendPingNow();
     }
 
     static string FormatRaceDay(string? value)
@@ -726,6 +738,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        PublishJumbotron();
         if (!_bibSender.Start(_settings.JumbotronHost, _settings.SendPort, _liveJumbotronMode, ShowSendStatus))
             return;
 
@@ -1027,6 +1040,10 @@ public partial class MainWindow : Window
                 _settings.SendPort = settings.SendPort;
             _settings.JumbotronMode = JumbotronModes.Normalize(settings.JumbotronMode);
             _liveJumbotronMode = _settings.JumbotronMode;
+            _settings.RaceStartTime = settings.RaceStartTime ?? "";
+            _settings.WeatherLocation = string.IsNullOrWhiteSpace(settings.WeatherLocation)
+                ? WeatherFeed.DefaultPlace
+                : settings.WeatherLocation.Trim();
             _settings.EventWelcomeImage = settings.EventWelcomeImage ?? "";
             _settings.EventWelcomeHint = settings.EventWelcomeHint ?? "";
             _settings.EventWelcomeUrl = settings.EventWelcomeUrl ?? "";
@@ -1035,6 +1052,7 @@ public partial class MainWindow : Window
             _settings.CameraAdvanced = settings.CameraAdvanced;
             _settings.CameraUseExact = settings.CameraUseExact;
             _settings.CameraExactUrl = settings.CameraExactUrl ?? "";
+            _settings.ScrollReports = settings.ScrollReports ?? new();
             _theme = AppThemes.Normalize(settings.Theme);
             _settings.Theme = _theme;
         }
@@ -1092,6 +1110,10 @@ public partial class MainWindow : Window
         _settings.JumbotronHost = ui.JumboHostBox.Text.Trim();
         if (int.TryParse(ui.SendPortBox.Text.Trim(), out var sendPort) && sendPort is > 0 and <= 65535)
             _settings.SendPort = sendPort;
+        _settings.RaceStartTime = ui.RaceStartBox.Text.Trim();
+        _settings.WeatherLocation = string.IsNullOrWhiteSpace(ui.WeatherBox.Text)
+            ? WeatherFeed.DefaultPlace
+            : ui.WeatherBox.Text.Trim();
         _settings.EventWelcomeHint = ui.EventHintBox.Text.Trim();
         _settings.EventWelcomeUrl = ui.EventUrlBox.Text.Trim();
         _settings.CameraIp = ui.CameraIpBox.Text.Trim();
@@ -1135,6 +1157,10 @@ public partial class MainWindow : Window
         ui.JumboHostBox.Text = string.IsNullOrWhiteSpace(_settings.JumbotronHost) ? "127.0.0.1" : _settings.JumbotronHost;
         ui.SendPortBox.Text = _settings.SendPort.ToString();
         ui.SendStatusText.Text = _sendStatus;
+        ui.RaceStartBox.Text = _settings.RaceStartTime;
+        ui.WeatherBox.Text = string.IsNullOrWhiteSpace(_settings.WeatherLocation)
+            ? WeatherFeed.DefaultPlace
+            : _settings.WeatherLocation;
         ui.EventGraphicBox.Text = _settings.EventWelcomeImage;
         ui.EventHintBox.Text = _settings.EventWelcomeHint;
         ui.EventUrlBox.Text = _settings.EventWelcomeUrl;
@@ -1182,8 +1208,10 @@ public partial class MainWindow : Window
             SaveSettings();
         if (liveChanged)
         {
-            _bibSender.SetMode(id);
             PublishJumbotron();
+            _bibSender.SetMode(id);
+            if (id == JumbotronModes.EventWelcome)
+                LogEventWelcomeGraphic();
             Log(persist
                 ? "Jumbotron default mode is now " + JumbotronModes.LabelOf(id) + "."
                 : "Jumbotron mode is now " + JumbotronModes.LabelOf(id) + " for this session.");
@@ -1252,6 +1280,35 @@ public partial class MainWindow : Window
         PublishJumbotron();
     }
 
+    internal void RaceStart_LostFocus(object sender, RoutedEventArgs e)
+    {
+        SaveSettings();
+        if (!string.IsNullOrWhiteSpace(_settings.RaceStartTime)
+            && !RaceStartTime.TryParse(_settings.RaceStartTime, out _))
+        {
+            Log("Race start time was not understood. Use a time such as 7:30 AM.");
+            return;
+        }
+
+        _bibSender.SendPingNow();
+        PaintRaceClock();
+        var snap = CurrentRaceStart();
+        Log(snap == null ? "Race start time cleared." : "Race start time is " + snap.Display + ".");
+    }
+
+    internal void Weather_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_suppressSettings)
+            return;
+        SaveSettings();
+        _weather.SetPlace(_settings.WeatherLocation);
+        _bibSender.SendPingNow();
+        Log("Weather location is " + _settings.WeatherLocation + ".");
+    }
+
+    RaceStartSnapshot? CurrentRaceStart() =>
+        RaceStartTime.Resolve(_settings.RaceStartTime, _race?.Race?.StartDate, DateTime.Now);
+
     internal void Camera_LostFocus(object sender, RoutedEventArgs e)
     {
         if (_suppressSettings)
@@ -1305,8 +1362,7 @@ public partial class MainWindow : Window
         if (url.Length == 0)
         {
             StopCameraPlayback();
-            CameraHintText.Text = "Set a camera IP in Settings.";
-            CameraHintText.Visibility = Visibility.Visible;
+            SetCameraStatus("Not set", "No camera configured.", "Set a camera IP in Settings.");
             return;
         }
 
@@ -1318,81 +1374,82 @@ public partial class MainWindow : Window
 
         try
         {
-            using var media = new Media(_libVlc!, url, FromType.FromLocation);
-            _cameraPlayer!.Play(media);
+            _camera!.Play(url);
             _openCameraUrl = url;
-            CameraHintText.Visibility = Visibility.Collapsed;
+            SetCameraStatus("Opening", "Opening the camera.", null);
             Log("Camera opening " + CameraUrl.Redact(url) + ".");
         }
         catch (Exception ex)
         {
-            CameraHintText.Text = "Camera failed. " + ex.Message;
-            CameraHintText.Visibility = Visibility.Visible;
+            SetCameraStatus("Failed", "Camera failed.", "Camera failed. " + ex.Message);
             Log("Camera failed. " + ex.Message);
         }
     }
 
+    void SetCameraStatus(string summary, string caption, string? overlay)
+    {
+        _cameraSummary = summary;
+        _cameraLive = summary == "Live";
+        if (PreviewText != null)
+        {
+            PreviewText.Text = caption;
+            PreviewText.ToolTip = string.IsNullOrEmpty(overlay) ? caption : overlay;
+        }
+
+        if (CameraHintText != null)
+        {
+            if (string.IsNullOrEmpty(overlay))
+            {
+                CameraHintText.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                CameraHintText.Text = overlay;
+                CameraHintText.Visibility = Visibility.Visible;
+            }
+        }
+
+        PaintStatusBar();
+    }
+
     bool EnsureCameraPlayer()
     {
-        if (_cameraPlayer != null)
+        if (_camera != null)
             return true;
-        try
-        {
-            Core.Initialize();
-            _libVlc = new LibVLC("--network-caching=300", "--rtsp-tcp", "--quiet");
-            _cameraPlayer = new LibVLCSharp.Shared.MediaPlayer(_libVlc);
-            _cameraPlayer.EncounteredError += (_, _) => Dispatcher.BeginInvoke(() =>
-            {
-                if (_closing)
-                    return;
-                CameraHintText.Text = "Camera stream failed. Check the RTSP URL.";
-                CameraHintText.Visibility = Visibility.Visible;
-            });
-            CameraView.MediaPlayer = _cameraPlayer;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            CameraHintText.Text = "Camera player failed to start. " + ex.Message;
-            CameraHintText.Visibility = Visibility.Visible;
-            Log("Camera player failed to start. " + ex.Message);
+        if (CameraImage == null)
             return false;
-        }
+        _camera = new CameraPreview(CameraImage, line =>
+        {
+            if (_closing)
+                return;
+            if (line.Contains("failed", StringComparison.OrdinalIgnoreCase))
+                SetCameraStatus("Failed", "Camera failed.", line);
+            else if (line.StartsWith("Camera stream ", StringComparison.Ordinal))
+            {
+                var where = string.IsNullOrWhiteSpace(_settings.CameraIp) ? "" : " · " + _settings.CameraIp.Trim();
+                SetCameraStatus("Live", "Live" + where, null);
+            }
+            Log(line);
+        });
+        if (_camera.Start())
+            return true;
+        _camera.Dispose();
+        _camera = null;
+        SetCameraStatus("Failed", "Camera failed.", "Camera player failed to start.");
+        return false;
     }
 
     void StopCameraPlayback()
     {
         _openCameraUrl = "";
-        try
-        {
-            _cameraPlayer?.Stop();
-        }
-        catch (Exception)
-        {
-        }
+        _camera?.StopPlayback();
     }
 
     void StopCamera()
     {
         StopCameraPlayback();
-        if (CameraView != null)
-            CameraView.MediaPlayer = null;
-        try
-        {
-            _cameraPlayer?.Dispose();
-        }
-        catch (Exception)
-        {
-        }
-        try
-        {
-            _libVlc?.Dispose();
-        }
-        catch (Exception)
-        {
-        }
-        _cameraPlayer = null;
-        _libVlc = null;
+        _camera?.Dispose();
+        _camera = null;
     }
 
     void PublishJumbotron()
@@ -1401,7 +1458,126 @@ public partial class MainWindow : Window
             return;
         _bibSender.SetWelcome(BuildWelcome());
         _bibSender.SetEventWelcome(BuildEventWelcome());
-        _bibSender.SetBoard(JumbotronBoard.Build(_index, _race));
+        _bibSender.SetBoard(JumbotronBoard.Build(_sections, _race, _settings.ScrollReports));
+    }
+
+    internal void ChooseScrollFields(ReportSection section, UIElement anchor)
+    {
+        if (_scrollPopup != null)
+            _scrollPopup.IsOpen = false;
+
+        var catalog = ScrollFields.From(section.Report);
+        var selected = ScrollFields.SelectedKeys(section.Report, _settings.ScrollReports);
+        var ink = (Brush)FindResource("InkBrush");
+        var muted = (Brush)FindResource("MutedBrush");
+        var panel = new StackPanel { Margin = new Thickness(12), MaxWidth = 320 };
+        panel.Children.Add(new TextBlock
+        {
+            Text = section.Title,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = ink,
+            TextWrapping = TextWrapping.Wrap
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Place and name always show on scrolling results. Check the other fields from this report.",
+            Margin = new Thickness(0, 4, 0, 8),
+            Foreground = muted,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        var place = catalog.FirstOrDefault(field => field.Required && field.Role == ColumnRole.Place);
+        var name = catalog.FirstOrDefault(field => field.Required && field.Role == ColumnRole.Name);
+        AddLockedField(panel, place?.Label ?? "Place", ink);
+        if (name == null)
+            AddLockedField(panel, "Name", ink);
+        foreach (var field in catalog.OrderBy(item => item.Index))
+        {
+            if (place != null && ReferenceEquals(field, place))
+                continue;
+            if (field.Required)
+            {
+                AddLockedField(panel, field.Label, ink);
+                continue;
+            }
+
+            var box = new CheckBox
+            {
+                Content = field.Label,
+                IsChecked = selected.Contains(field.Key),
+                Foreground = ink,
+                Margin = new Thickness(0, 3, 0, 3),
+                Tag = field.Key
+            };
+            box.Checked += (_, _) => SaveScrollFields(section, catalog, panel);
+            box.Unchecked += (_, _) => SaveScrollFields(section, catalog, panel);
+            panel.Children.Add(box);
+        }
+
+        var popup = new Popup
+        {
+            PlacementTarget = anchor,
+            Placement = PlacementMode.Bottom,
+            VerticalOffset = 4,
+            StaysOpen = false,
+            AllowsTransparency = true,
+            Child = new Border
+            {
+                Background = (Brush)FindResource("PanelBrush"),
+                BorderBrush = (Brush)FindResource("LineBrush"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(8),
+                Child = new ScrollViewer
+                {
+                    MaxHeight = 420,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    Content = panel
+                }
+            }
+        };
+        _scrollPopup = popup;
+        popup.IsOpen = true;
+    }
+
+    static void AddLockedField(Panel panel, string label, Brush ink)
+    {
+        panel.Children.Add(new CheckBox
+        {
+            Content = label,
+            IsChecked = true,
+            IsEnabled = false,
+            Foreground = ink,
+            Margin = new Thickness(0, 3, 0, 3)
+        });
+    }
+
+    void SaveScrollFields(ReportSection section, IReadOnlyList<ScrollField> catalog, Panel panel)
+    {
+        var picked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var child in panel.Children)
+        {
+            if (child is not CheckBox box || box.Tag is not string key || box.IsChecked != true || !box.IsEnabled)
+                continue;
+            picked.Add(key);
+        }
+
+        var ordered = catalog
+            .Where(field => picked.Contains(field.Key))
+            .OrderBy(field => field.Index)
+            .Select(field => field.Key)
+            .ToList();
+        var reportKey = ScrollFields.ReportKey(section.Report);
+        _settings.ScrollReports ??= new();
+        _settings.ScrollReports.RemoveAll(item => string.Equals(item.Key, reportKey, StringComparison.OrdinalIgnoreCase));
+        _settings.ScrollReports.Add(new ScrollReportSetting { Key = reportKey, Fields = ordered });
+        SaveSettings();
+        PublishJumbotron();
+
+        var labels = catalog
+            .Where(field => picked.Contains(field.Key))
+            .OrderBy(field => field.Index)
+            .Select(field => field.Label);
+        Log("Scrolling fields for " + section.Title + ": " + string.Join(", ", new[] { "Place", "Name" }.Concat(labels)) + ".");
     }
 
     JumbotronWelcome BuildWelcome()
@@ -1436,6 +1612,25 @@ public partial class MainWindow : Window
             ImageMime = image.Mime,
             Image = image.Data
         };
+    }
+
+    void LogEventWelcomeGraphic()
+    {
+        var path = _settings.EventWelcomeImage;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            Log("Event welcome has no graphic. Choose one in Settings.");
+            return;
+        }
+
+        var image = JumbotronImage.Encode(path);
+        if (image.Data.Length == 0)
+        {
+            Log("Event welcome graphic was not sent. Could not read " + path + ".");
+            return;
+        }
+
+        Log("Event welcome graphic sent (" + Path.GetFileName(path) + ").");
     }
 
     static string FormatRaceStart(string? value)
@@ -1554,9 +1749,8 @@ public partial class MainWindow : Window
         JumboDot.Fill = (Brush)FindResource(connected ? "GoodBrush" : "WarnBrush");
         JumboDetailText.Text = CompactSendStatus(status);
         JumboDetailText.ToolTip = status;
-        PreviewText.Text = connected ? mode + ". " + CompactSendStatus(status) : "Not connected to the jumbotron. Mode is " + mode + ".";
-        PreviewText.ToolTip = status;
         PaintStats();
+        PaintStatusBar();
     }
 
     static string CompactSendStatus(string status)
@@ -1642,11 +1836,15 @@ public partial class MainWindow : Window
 
     bool TryRaceStart(out DateTime start)
     {
-        start = default;
-        var value = _race?.Race?.StartDate;
-        if (string.IsNullOrWhiteSpace(value) || !DateTime.TryParse(value, out start))
+        var snap = CurrentRaceStart();
+        if (snap == null)
+        {
+            start = default;
             return false;
-        return start.TimeOfDay > TimeSpan.Zero;
+        }
+
+        start = snap.At;
+        return true;
     }
 
     static string FormatElapsed(TimeSpan span)
@@ -1701,11 +1899,39 @@ public partial class MainWindow : Window
         ConnectionText.Text = connected ? "Connected to RaceDay Scoring" : "Not connected to RaceDay Scoring";
         ConnectionText.ToolTip = ConnectionText.Text;
         ConnectionDot.Fill = (Brush)FindResource(connected ? "GoodBrush" : "WarnBrush");
+        _rdsConnected = connected;
+        PaintStatusBar();
         if (detail.StartsWith("Last poll", StringComparison.Ordinal))
             PaintReportHint();
         else if (!string.IsNullOrEmpty(detail))
             StatusText.Text = detail;
         PaintPoll();
+    }
+
+    void PaintStatusBar()
+    {
+        if (StatusJumboText == null)
+            return;
+
+        var jumboOn = _sendStatus.StartsWith("Connected", StringComparison.OrdinalIgnoreCase);
+        var mode = JumbotronModes.LabelOf(_liveJumbotronMode);
+        StatusJumboDot.Fill = (Brush)FindResource(jumboOn ? "GoodBrush" : "WarnBrush");
+        StatusJumboText.Text = jumboOn ? "Connected" : "Not connected";
+        StatusJumboText.ToolTip = mode + ". " + _sendStatus;
+
+        var rdsText = _rdsConnected
+            ? (_automatic ? "Receiving" : "Connected")
+            : (ConnectionText.Text.StartsWith("Connecting", StringComparison.Ordinal) ? "Connecting" : "Not connected");
+        StatusRdsDot.Fill = (Brush)FindResource(_rdsConnected ? "GoodBrush" : "WarnBrush");
+        StatusRdsText.Text = rdsText;
+        StatusRdsText.ToolTip = _lastPoll == null
+            ? ConnectionText.Text
+            : ConnectionText.Text + ". Last poll " + _lastPoll.Value.ToString("h:mm:ss tt") + ".";
+
+        var cameraOn = _cameraSummary == "Live";
+        StatusCameraDot.Fill = (Brush)FindResource(cameraOn ? "GoodBrush" : "WarnBrush");
+        StatusCameraText.Text = _cameraSummary;
+        StatusCameraText.ToolTip = PreviewText?.ToolTip ?? PreviewText?.Text;
     }
 
     void PaintStats()

@@ -57,39 +57,104 @@
                                    Foreground="{StaticResource MutedBrush}"
                                    TextWrapping="Wrap"
                                    Text="Race day"/>
+                        <Grid Margin="0,16,0,0">
+                            <TextBlock x:Name="WelcomeWeather"
+                                       FontSize="16"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       TextWrapping="Wrap"
+                                       Text="Waiting for RDS"/>
+                            <TextBlock x:Name="WelcomeClock"
+                                       FontSize="16"
+                                       HorizontalAlignment="Right"
+                                       TextAlignment="Right"
+                                       Foreground="{StaticResource MutedBrush}"/>
+                        </Grid>
                     </StackPanel>
                 </Border>
             </Grid>
-            <Grid x:Name="EventWelcomeStage" Visibility="Collapsed" Background="{StaticResource WindowBrush}">
-                <Image x:Name="EventImage" Stretch="UniformToFill"/>
-                <Border VerticalAlignment="Bottom" Background="#B3070B10" Padding="36,28">
-                    <StackPanel>
-                        <TextBlock x:Name="EventTitle"
-                                   Text="Event welcome"
-                                   FontSize="48"
-                                   FontWeight="Bold"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="EventStart"
-                                   Margin="0,10,0,0"
-                                   FontSize="26"
-                                   Foreground="{StaticResource AccentBrush}"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="EventEvents"
-                                   Margin="0,6,0,0"
-                                   FontSize="20"
-                                   Foreground="{StaticResource MutedBrush}"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="EventHint"
-                                   Margin="0,16,0,0"
-                                   FontSize="22"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="EventUrl"
-                                   Margin="0,6,0,0"
-                                   FontSize="18"
-                                   Foreground="{StaticResource AccentBrush}"
-                                   TextWrapping="Wrap"/>
-                    </StackPanel>
-                </Border>
+            <Grid x:Name="EventWelcomeStage" Visibility="Collapsed" Background="#071533">
+                <Viewbox Stretch="Uniform">
+                    <Grid Width="1920" Height="1080">
+                        <Image x:Name="EventImage" Stretch="UniformToFill"/>
+                        <Grid x:Name="EventChrome">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="56.5*"/>
+                                <RowDefinition Height="4.5*"/>
+                                <RowDefinition Height="18*"/>
+                                <RowDefinition Height="21*"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="40.8*"/>
+                                <ColumnDefinition Width="29.6*"/>
+                                <ColumnDefinition Width="29.6*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.ColumnSpan="3" VerticalAlignment="Bottom" Margin="64,0,64,36">
+                                <TextBlock x:Name="EventTitle"
+                                           Text="Event welcome"
+                                           FontSize="64"
+                                           FontWeight="Bold"
+                                           Foreground="White"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock x:Name="EventHint"
+                                           Margin="0,12,0,0"
+                                           FontSize="28"
+                                           Foreground="#D6E8F8"
+                                           TextWrapping="Wrap"/>
+                                <TextBlock x:Name="EventUrl"
+                                           Margin="0,8,0,0"
+                                           FontSize="24"
+                                           Foreground="#F5C518"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Border Grid.Row="1" Grid.Column="1" Background="#F5C518">
+                                <TextBlock Text="RACE STARTS AT"
+                                           FontWeight="Bold"
+                                           FontSize="28"
+                                           Foreground="#071533"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                            <Border Grid.Row="1" Grid.Column="2" Background="#F5C518">
+                                <TextBlock Text="TIME UNTIL START"
+                                           FontWeight="Bold"
+                                           FontSize="28"
+                                           Foreground="#071533"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                            <Border Grid.Row="2" Grid.Column="1" Background="#071533"/>
+                            <Border Grid.Row="2" Grid.Column="2" Background="#071533"/>
+                            <Border Grid.Row="1" Grid.Column="2" Width="6" HorizontalAlignment="Left"
+                                    Grid.RowSpan="2" Background="#F5C518"/>
+                        </Grid>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="61*"/>
+                                <RowDefinition Height="18*"/>
+                                <RowDefinition Height="21*"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="40.8*"/>
+                                <ColumnDefinition Width="29.6*"/>
+                                <ColumnDefinition Width="29.6*"/>
+                            </Grid.ColumnDefinitions>
+                            <Viewbox Grid.Row="1" Grid.Column="1" Margin="48,20" Stretch="Uniform">
+                                <TextBlock x:Name="EventGunTimeText"
+                                           Text="—"
+                                           FontWeight="Bold"
+                                           FontSize="72"
+                                           Foreground="White"/>
+                            </Viewbox>
+                            <Viewbox Grid.Row="1" Grid.Column="2" Margin="48,20" Stretch="Uniform">
+                                <TextBlock x:Name="EventCountdownText"
+                                           Text="—"
+                                           FontWeight="Bold"
+                                           FontSize="72"
+                                           Foreground="White"/>
+                            </Viewbox>
+                        </Grid>
+                    </Grid>
+                </Viewbox>
             </Grid>
             <DockPanel x:Name="BoardStage" Visibility="Collapsed">
                 <TextBlock x:Name="BoardTitle"
@@ -98,43 +163,11 @@
                            FontWeight="Bold"
                            Margin="8,0,8,12"
                            Text="Scrolling results"/>
-                <Grid DockPanel.Dock="Top" Margin="8,0,8,8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="90"/>
-                        <ColumnDefinition Width="110"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="160"/>
-                        <ColumnDefinition Width="220"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="Place" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
-                    <TextBlock Grid.Column="1" Text="Bib" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
-                    <TextBlock Grid.Column="2" Text="Name" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
-                    <TextBlock Grid.Column="3" Text="Finish" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
-                    <TextBlock Grid.Column="4" Text="City" FontWeight="SemiBold" Foreground="{StaticResource MutedBrush}"/>
-                </Grid>
+                <Grid x:Name="BoardHeader" DockPanel.Dock="Top" Margin="8,0,8,8"/>
                 <ScrollViewer x:Name="BoardScroller"
                               VerticalScrollBarVisibility="Hidden"
                               HorizontalScrollBarVisibility="Disabled">
-                    <ItemsControl x:Name="BoardRows">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Margin="8,6">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="90"/>
-                                        <ColumnDefinition Width="110"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="160"/>
-                                        <ColumnDefinition Width="220"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Place}" FontSize="28" FontWeight="SemiBold"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding Bib}" FontSize="28"/>
-                                    <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="28" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Grid.Column="3" Text="{Binding FinishTime}" FontSize="28"/>
-                                    <TextBlock Grid.Column="4" Text="{Binding City}" FontSize="22" Foreground="{StaticResource MutedBrush}" TextTrimming="CharacterEllipsis"/>
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <StackPanel x:Name="BoardLines"/>
                 </ScrollViewer>
             </DockPanel>
             <DockPanel x:Name="ReadsStage">

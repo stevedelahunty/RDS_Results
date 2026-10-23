@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
@@ -10,13 +12,18 @@ namespace RDS_Display;
 public partial class MainWindow : Window
 {
     readonly ObservableCollection<ShownRead> _reads = new();
-    readonly ObservableCollection<ShownBoardRow> _boardRows = new();
     readonly List<ShownBoardPage> _boardPages = new();
     readonly DispatcherTimer _boardTimer = new() { Interval = TimeSpan.FromMilliseconds(40) };
+    readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
     CancellationTokenSource? _session;
     bool _closing;
     bool _started;
     string _mode = JumbotronModes.BibReads;
+    DateTime _hostAt;
+    DateTime _hostSyncUtc;
+    bool _hasHostClock;
+    DateTime? _raceStartAt;
+    string _raceStartLabel = "";
     int _boardPage;
     BoardPhase _boardPhase = BoardPhase.HoldTop;
     DateTime _boardHoldUntil;
@@ -25,8 +32,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         ReadsGrid.ItemsSource = _reads;
-        BoardRows.ItemsSource = _boardRows;
         _boardTimer.Tick += (_, _) => TickBoard();
+        _clock.Tick += (_, _) => PaintEventClock();
+        _clock.Start();
         ApplyMode(JumbotronModes.BibReads);
         LoadSettings();
     }
@@ -44,6 +52,7 @@ public partial class MainWindow : Window
     {
         _closing = true;
         _boardTimer.Stop();
+        _clock.Stop();
         SaveSettings();
         Stop();
         base.OnClosed(e);
@@ -162,7 +171,7 @@ public partial class MainWindow : Window
 
             if (ty == "ping")
             {
-                StatusText.Text = "Connected · " + DateTime.Now.ToString("HH:mm:ss");
+                ApplyPing(root);
                 return;
             }
 
@@ -239,23 +248,97 @@ public partial class MainWindow : Window
             StartBoard();
         else
             _boardTimer.Stop();
+        if (_mode == JumbotronModes.EventWelcome)
+            PaintEventClock();
     }
 
     static Visibility VisibleIf(bool on) => on ? Visibility.Visible : Visibility.Collapsed;
 
+    void ApplyPing(JsonElement root)
+    {
+        var time = Text(root, "time");
+        var date = Text(root, "date");
+        StatusText.Text = "Connected · " + (time.Length > 0 ? time : DateTime.Now.ToString("HH:mm:ss"));
+        if (time.Length > 0 || date.Length > 0)
+            WelcomeClock.Text = string.Join("\n", new[] { time, date }.Where(part => part.Length > 0));
+        if (root.TryGetProperty("h", out _) || root.TryGetProperty("m", out _))
+        {
+            _hostAt = DateTime.Today.AddHours(Int(root, "h")).AddMinutes(Int(root, "m")).AddSeconds(Int(root, "s"));
+            _hostSyncUtc = DateTime.UtcNow;
+            _hasHostClock = true;
+        }
+
+        _raceStartAt = null;
+        _raceStartLabel = "";
+        if (root.TryGetProperty("race", out var race) && race.ValueKind == JsonValueKind.Object)
+        {
+            _raceStartLabel = Text(race, "start");
+            var year = Int(race, "y");
+            var month = Int(race, "mo");
+            var day = Int(race, "d");
+            if (year > 0 && month is >= 1 and <= 12 && day is >= 1 and <= 31)
+            {
+                try
+                {
+                    _raceStartAt = new DateTime(year, month, day, Int(race, "h"), Int(race, "m"), Int(race, "s"));
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    _raceStartAt = null;
+                }
+            }
+        }
+
+        PaintEventClock();
+        if (!root.TryGetProperty("wx", out var wx) || wx.ValueKind != JsonValueKind.Object)
+            return;
+        var loc = Text(wx, "loc");
+        var temp = Text(wx, "temp");
+        var cond = Text(wx, "cond");
+        var lines = new List<string>();
+        if (loc.Length > 0)
+            lines.Add(loc);
+        var weather = temp;
+        if (cond.Length > 0)
+            weather = (weather.Length > 0 ? weather + "  " : "") + cond;
+        if (weather.Length > 0)
+            lines.Add(weather);
+        if (lines.Count > 0)
+            WelcomeWeather.Text = string.Join("\n", lines);
+    }
+
     void ApplyEventWelcome(JsonElement root)
     {
         EventTitle.Text = Or(Text(root, "title"), "Event welcome");
-        EventStart.Text = Text(root, "start");
-        EventEvents.Text = Text(root, "events");
         EventHint.Text = Text(root, "hint");
         EventUrl.Text = Text(root, "resultsUrl");
         EventImage.Source = ImageFromBase64(Text(root, "image"));
-        EventStart.Visibility = VisibleIf(EventStart.Text.Length > 0);
-        EventEvents.Visibility = VisibleIf(EventEvents.Text.Length > 0);
-        EventHint.Visibility = VisibleIf(EventHint.Text.Length > 0);
-        EventUrl.Visibility = VisibleIf(EventUrl.Text.Length > 0);
+        var hasImage = EventImage.Source != null;
+        EventChrome.Visibility = VisibleIf(!hasImage);
+        EventTitle.Visibility = VisibleIf(!hasImage);
+        EventHint.Visibility = VisibleIf(!hasImage && EventHint.Text.Length > 0);
+        EventUrl.Visibility = VisibleIf(!hasImage && EventUrl.Text.Length > 0);
+        PaintEventClock();
     }
+
+    void PaintEventClock()
+    {
+        if (_closing || EventGunTimeText == null)
+            return;
+        EventGunTimeText.Text = _raceStartLabel.Length > 0 ? _raceStartLabel : "—";
+        if (_raceStartAt == null || !_hasHostClock)
+        {
+            EventCountdownText.Text = "—";
+            return;
+        }
+
+        var left = _raceStartAt.Value - HostNow();
+        if (left < TimeSpan.Zero)
+            left = TimeSpan.Zero;
+        EventCountdownText.Text = $"{(int)left.TotalHours}:{left.Minutes:00}:{left.Seconds:00}";
+    }
+
+    DateTime HostNow() => _hasHostClock ? _hostAt + (DateTime.UtcNow - _hostSyncUtc) : DateTime.Now;
 
     void ApplyBoard(JsonElement root)
     {
@@ -264,25 +347,18 @@ public partial class MainWindow : Window
         {
             foreach (var page in pages.EnumerateArray())
             {
+                var columns = ReadColumns(page);
                 var rows = new List<ShownBoardRow>();
                 if (page.TryGetProperty("rows", out var list) && list.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var row in list.EnumerateArray())
-                    {
-                        rows.Add(new ShownBoardRow
-                        {
-                            Place = Text(row, "place"),
-                            Bib = Text(row, "bib"),
-                            Name = Text(row, "name"),
-                            FinishTime = Text(row, "finishTime"),
-                            City = Text(row, "city")
-                        });
-                    }
+                        rows.Add(new ShownBoardRow { Cells = ReadCells(row, columns) });
                 }
 
                 incoming.Add(new ShownBoardPage
                 {
                     Title = Text(page, "title"),
+                    Columns = columns,
                     Rows = rows
                 });
             }
@@ -298,21 +374,89 @@ public partial class MainWindow : Window
             StartBoard();
     }
 
+    static List<ShownBoardColumn> ReadColumns(JsonElement page)
+    {
+        var columns = new List<ShownBoardColumn>();
+        if (page.TryGetProperty("columns", out var list) && list.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var column in list.EnumerateArray())
+            {
+                columns.Add(new ShownBoardColumn
+                {
+                    Key = Text(column, "key"),
+                    Label = Text(column, "label"),
+                    Role = Text(column, "role")
+                });
+            }
+        }
+
+        if (columns.Count > 0)
+            return columns;
+
+        return
+        [
+            new ShownBoardColumn { Key = "place", Label = "Place", Role = "place" },
+            new ShownBoardColumn { Key = "bib", Label = "Bib", Role = "bib" },
+            new ShownBoardColumn { Key = "name", Label = "Name", Role = "name" },
+            new ShownBoardColumn { Key = "finishTime", Label = "Finish", Role = "net" },
+            new ShownBoardColumn { Key = "city", Label = "City", Role = "city" }
+        ];
+    }
+
+    static List<string> ReadCells(JsonElement row, IReadOnlyList<ShownBoardColumn> columns)
+    {
+        if (row.TryGetProperty("cells", out var cells) && cells.ValueKind == JsonValueKind.Array)
+        {
+            var values = new List<string>();
+            foreach (var cell in cells.EnumerateArray())
+                values.Add(cell.ValueKind == JsonValueKind.String ? cell.GetString() ?? "" : cell.ToString());
+            while (values.Count < columns.Count)
+                values.Add("");
+            return values;
+        }
+
+        var legacy = new List<string>(columns.Count);
+        foreach (var column in columns)
+            legacy.Add(Text(row, LegacyName(column)));
+        return legacy;
+    }
+
+    static string LegacyName(ShownBoardColumn column) => column.Role switch
+    {
+        "place" => "place",
+        "bib" => "bib",
+        "name" => "name",
+        "net" or "clock" => "finishTime",
+        "pace" => "pace",
+        "city" => "city",
+        _ => column.Key
+    };
+
     static bool SameBoard(IReadOnlyList<ShownBoardPage> left, IReadOnlyList<ShownBoardPage> right)
     {
         if (left.Count != right.Count)
             return false;
         for (var i = 0; i < left.Count; i++)
         {
-            if (left[i].Title != right[i].Title || left[i].Rows.Count != right[i].Rows.Count)
+            if (left[i].Title != right[i].Title || left[i].Columns.Count != right[i].Columns.Count || left[i].Rows.Count != right[i].Rows.Count)
                 return false;
+            for (var c = 0; c < left[i].Columns.Count; c++)
+            {
+                if (left[i].Columns[c].Key != right[i].Columns[c].Key || left[i].Columns[c].Label != right[i].Columns[c].Label)
+                    return false;
+            }
+
             for (var j = 0; j < left[i].Rows.Count; j++)
             {
-                var a = left[i].Rows[j];
-                var b = right[i].Rows[j];
-                if (a.Place != b.Place || a.Bib != b.Bib || a.Name != b.Name
-                    || a.FinishTime != b.FinishTime || a.City != b.City)
+                var a = left[i].Rows[j].Cells;
+                var b = right[i].Rows[j].Cells;
+                if (a.Count != b.Count)
                     return false;
+                for (var c = 0; c < a.Count; c++)
+                {
+                    if (a[c] != b[c])
+                        return false;
+                }
             }
         }
 
@@ -324,7 +468,7 @@ public partial class MainWindow : Window
         if (_boardPages.Count == 0)
         {
             BoardTitle.Text = "Waiting for standings";
-            _boardRows.Clear();
+            ClearBoard();
             _boardTimer.Stop();
             return;
         }
@@ -339,17 +483,88 @@ public partial class MainWindow : Window
         if (_boardPages.Count == 0)
         {
             BoardTitle.Text = "Waiting for standings";
-            _boardRows.Clear();
+            ClearBoard();
             return;
         }
 
         _boardPage = ((index % _boardPages.Count) + _boardPages.Count) % _boardPages.Count;
         var page = _boardPages[_boardPage];
         BoardTitle.Text = page.Title.Length == 0 ? "Results" : page.Title;
-        _boardRows.Clear();
+        var font = BoardFont(page.Columns.Count);
+        PaintBoardGrid(BoardHeader, page.Columns, null, header: true, font);
+        BoardLines.Children.Clear();
         foreach (var row in page.Rows)
-            _boardRows.Add(row);
+        {
+            var grid = new Grid { Margin = new Thickness(8, 4, 8, 4) };
+            PaintBoardGrid(grid, page.Columns, row.Cells, header: false, font);
+            BoardLines.Children.Add(grid);
+        }
+
         BoardScroller.ScrollToVerticalOffset(0);
+    }
+
+    void ClearBoard()
+    {
+        BoardHeader.ColumnDefinitions.Clear();
+        BoardHeader.Children.Clear();
+        BoardLines.Children.Clear();
+    }
+
+    void PaintBoardGrid(Grid grid, IReadOnlyList<ShownBoardColumn> columns, IReadOnlyList<string>? cells, bool header, double font)
+    {
+        grid.ColumnDefinitions.Clear();
+        grid.Children.Clear();
+        var ink = (Brush)FindResource("InkBrush");
+        var muted = (Brush)FindResource("MutedBrush");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var column = columns[i];
+            var name = column.Role == "name";
+            var definition = new ColumnDefinition
+            {
+                Width = name
+                    ? new GridLength(1, GridUnitType.Star)
+                    : new GridLength(ColumnWidth(column.Role, font))
+            };
+            if (name)
+                definition.MinWidth = 80;
+            grid.ColumnDefinitions.Add(definition);
+
+            var text = new TextBlock
+            {
+                Text = header
+                    ? (column.Label.Length == 0 ? column.Key : column.Label)
+                    : (cells != null && i < cells.Count ? cells[i] : ""),
+                FontSize = header ? Math.Max(16, font - 8) : font,
+                FontWeight = header || column.Role == "place" ? FontWeights.SemiBold : FontWeights.Normal,
+                Foreground = header ? muted : ink,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 0, 12, 0)
+            };
+            Grid.SetColumn(text, i);
+            grid.Children.Add(text);
+        }
+    }
+
+    static double BoardFont(int columns) => columns switch
+    {
+        <= 5 => 28,
+        <= 7 => 24,
+        _ => 20
+    };
+
+    static double ColumnWidth(string role, double font)
+    {
+        var scale = font / 28.0;
+        var raw = role switch
+        {
+            "place" or "agePlace" or "age" => 90,
+            "bib" or "state" or "gender" => 110,
+            "net" or "clock" or "pace" => 160,
+            "chip" => 130,
+            _ => 180
+        };
+        return Math.Round(raw * scale);
     }
 
     void TickBoard()
@@ -515,16 +730,20 @@ enum BoardPhase
 public sealed class ShownBoardPage
 {
     public string Title { get; init; } = "";
+    public List<ShownBoardColumn> Columns { get; init; } = new();
     public List<ShownBoardRow> Rows { get; init; } = new();
+}
+
+public sealed class ShownBoardColumn
+{
+    public string Key { get; init; } = "";
+    public string Label { get; init; } = "";
+    public string Role { get; init; } = "";
 }
 
 public sealed class ShownBoardRow
 {
-    public string Place { get; init; } = "";
-    public string Bib { get; init; } = "";
-    public string Name { get; init; } = "";
-    public string FinishTime { get; init; } = "";
-    public string City { get; init; } = "";
+    public List<string> Cells { get; init; } = new();
 }
 
 public sealed class ShownRead

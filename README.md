@@ -16,7 +16,11 @@ The header is the race at a glance: name and event id, dates, how many reports a
 
 **Bib reads** lists announcer reads for the timing locations you choose.
 
-**Settings** holds the RaceDay connection, theme, bib listener, jumbotron mode, camera, and display sending.
+**Settings** holds the RaceDay connection, theme, bib listener, jumbotron mode, race start time, weather location, camera, and display sending.
+
+Race start time is the gun time for Event welcome. It is sent with each jumbotron ping so the display can show the start and a countdown in the two standard boxes on the event graphic.
+
+Weather is fetched for the configured location (default **Londonderry, NH**) and sent on each jumbotron ping. It does not use the computer’s public IP.
 
 The camera URL is built from the camera IP and a template (`rtsp://{ip}:554/stream1` by default). **Advanced** can change that template or set an exact RTSP URL.
 

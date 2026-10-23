@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
@@ -22,6 +23,8 @@ public sealed class BibSender : IDisposable
     int _port;
     int _generation;
     string _mode = JumbotronModes.BibReads;
+    public Func<WeatherSnapshot?>? Weather { get; set; }
+    public Func<RaceStartSnapshot?>? RaceStart { get; set; }
     string? _welcomeJson;
     string? _eventWelcomeJson;
     string? _boardJson;
@@ -91,6 +94,7 @@ public sealed class BibSender : IDisposable
     public void SetMode(string mode)
     {
         var id = JumbotronModes.Normalize(mode);
+        string? extra = null;
         List<ClientSlot> slots;
         lock (_gate)
         {
@@ -100,12 +104,25 @@ public sealed class BibSender : IDisposable
             if (!_running)
                 return;
             slots = _clients.ToList();
+            extra = StageFor(id);
         }
 
         var line = FormatMode(id);
         foreach (var slot in slots)
+        {
             slot.Outbox.Writer.TryWrite(line);
+            if (extra != null)
+                slot.Outbox.Writer.TryWrite(extra);
+        }
     }
+
+    string? StageFor(string mode) => mode switch
+    {
+        JumbotronModes.Welcome => _welcomeJson,
+        JumbotronModes.EventWelcome => _eventWelcomeJson,
+        JumbotronModes.ScrollingResults => _boardJson,
+        _ => null
+    };
 
     public void SetWelcome(JumbotronWelcome welcome) =>
         ReplaceStage(ref _welcomeJson, FormatWelcome(welcome));
@@ -198,6 +215,7 @@ public sealed class BibSender : IDisposable
                     slot.Outbox.Writer.TryWrite(_boardJson);
                 foreach (var id in _order)
                     slot.Outbox.Writer.TryWrite(_byId[id]);
+                slot.Outbox.Writer.TryWrite(BuildPing());
                 count = _clients.Count;
             }
 
@@ -264,12 +282,13 @@ public sealed class BibSender : IDisposable
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
                 List<ClientSlot> slots;
                 lock (_gate)
                     slots = _running ? _clients.ToList() : new List<ClientSlot>();
+                string ping = BuildPing();
                 foreach (var slot in slots)
-                    slot.Outbox.Writer.TryWrite(PingJson);
+                    slot.Outbox.Writer.TryWrite(ping);
+                await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException)
@@ -353,19 +372,102 @@ public sealed class BibSender : IDisposable
         Pages = pages.Select(page => new WireBoardPage
         {
             Title = page.Title,
+            Columns = page.Columns.Select(column => new WireBoardColumn
+            {
+                Key = column.Key,
+                Label = column.Label,
+                Role = column.Role
+            }).ToList(),
             Rows = page.Rows.Select(row => new WireBoardRow
             {
-                Place = row.Place,
-                Bib = row.Bib,
-                Name = row.Name,
-                FinishTime = row.FinishTime,
-                Pace = row.Pace,
-                City = row.City
+                Cells = row.Cells,
+                Place = Legacy(page.Columns, row.Cells, "place"),
+                Bib = Legacy(page.Columns, row.Cells, "bib"),
+                Name = Legacy(page.Columns, row.Cells, "name"),
+                FinishTime = Legacy(page.Columns, row.Cells, "net", "clock"),
+                Pace = Legacy(page.Columns, row.Cells, "pace"),
+                City = Legacy(page.Columns, row.Cells, "city")
             }).ToList()
         }).ToList()
     });
 
-    static readonly string PingJson = JsonSerializer.Serialize(new WirePing());
+    static string Legacy(IReadOnlyList<JumbotronBoardColumn> columns, IReadOnlyList<string> cells, params string[] roles)
+    {
+        foreach (var role in roles)
+        {
+            for (var i = 0; i < columns.Count; i++)
+            {
+                if (columns[i].Role != role)
+                    continue;
+                return i < cells.Count ? cells[i] : "";
+            }
+        }
+
+        return "";
+    }
+
+    static readonly JsonSerializerOptions PingJsonOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    public void SendPingNow()
+    {
+        List<ClientSlot> slots;
+        lock (_gate)
+        {
+            if (!_running)
+                return;
+            slots = _clients.ToList();
+        }
+
+        var ping = BuildPing();
+        foreach (var slot in slots)
+            slot.Outbox.Writer.TryWrite(ping);
+    }
+
+    string BuildPing() => FormatPing(Weather?.Invoke(), RaceStart?.Invoke());
+
+    static string FormatPing(WeatherSnapshot? weather, RaceStartSnapshot? raceStart)
+    {
+        DateTime now = DateTime.Now;
+        WireWeather? wx = null;
+        if (weather != null && (weather.Loc.Length > 0 || weather.Temp.Length > 0))
+        {
+            wx = new WireWeather
+            {
+                Loc = weather.Loc,
+                Temp = weather.Temp,
+                Cond = weather.Cond
+            };
+        }
+
+        WireRaceStart? race = null;
+        if (raceStart != null)
+        {
+            race = new WireRaceStart
+            {
+                Start = raceStart.Display,
+                H = raceStart.At.Hour,
+                M = raceStart.At.Minute,
+                S = raceStart.At.Second,
+                Y = raceStart.At.Year,
+                Mo = raceStart.At.Month,
+                D = raceStart.At.Day
+            };
+        }
+
+        return JsonSerializer.Serialize(new WirePing
+        {
+            Time = now.ToString("h:mm tt", CultureInfo.InvariantCulture),
+            Date = now.ToString("ddd MMM d", CultureInfo.InvariantCulture),
+            H = now.Hour,
+            M = now.Minute,
+            S = now.Second,
+            Race = race,
+            Wx = wx
+        }, PingJsonOptions);
+    }
 
     sealed class ClientSlot
     {
@@ -395,6 +497,31 @@ public sealed class BibSender : IDisposable
     {
         [JsonPropertyName("v")] public int V { get; init; } = 1;
         [JsonPropertyName("ty")] public string Ty { get; init; } = "ping";
+        [JsonPropertyName("time")] public string Time { get; init; } = "";
+        [JsonPropertyName("date")] public string Date { get; init; } = "";
+        [JsonPropertyName("h")] public int H { get; init; }
+        [JsonPropertyName("m")] public int M { get; init; }
+        [JsonPropertyName("s")] public int S { get; init; }
+        [JsonPropertyName("race")] public WireRaceStart? Race { get; init; }
+        [JsonPropertyName("wx")] public WireWeather? Wx { get; init; }
+    }
+
+    sealed class WireRaceStart
+    {
+        [JsonPropertyName("start")] public string Start { get; init; } = "";
+        [JsonPropertyName("h")] public int H { get; init; }
+        [JsonPropertyName("m")] public int M { get; init; }
+        [JsonPropertyName("s")] public int S { get; init; }
+        [JsonPropertyName("y")] public int Y { get; init; }
+        [JsonPropertyName("mo")] public int Mo { get; init; }
+        [JsonPropertyName("d")] public int D { get; init; }
+    }
+
+    sealed class WireWeather
+    {
+        [JsonPropertyName("loc")] public string Loc { get; init; } = "";
+        [JsonPropertyName("temp")] public string Temp { get; init; } = "";
+        [JsonPropertyName("cond")] public string Cond { get; init; } = "";
     }
 
     sealed class WireWelcome
@@ -428,11 +555,20 @@ public sealed class BibSender : IDisposable
     sealed class WireBoardPage
     {
         [JsonPropertyName("title")] public string Title { get; init; } = "";
+        [JsonPropertyName("columns")] public List<WireBoardColumn> Columns { get; init; } = new();
         [JsonPropertyName("rows")] public List<WireBoardRow> Rows { get; init; } = new();
+    }
+
+    sealed class WireBoardColumn
+    {
+        [JsonPropertyName("key")] public string Key { get; init; } = "";
+        [JsonPropertyName("label")] public string Label { get; init; } = "";
+        [JsonPropertyName("role")] public string Role { get; init; } = "";
     }
 
     sealed class WireBoardRow
     {
+        [JsonPropertyName("cells")] public List<string> Cells { get; init; } = new();
         [JsonPropertyName("place")] public string Place { get; init; } = "";
         [JsonPropertyName("bib")] public string Bib { get; init; } = "";
         [JsonPropertyName("name")] public string Name { get; init; } = "";

@@ -27,8 +27,8 @@ If the socket drops, RDS Results connects again. Every connection starts over wi
 5. RDS Results sends each new read as it arrives.
 6. When a later results refresh fills in finish data for a read already sent, RDS Results sends that read again with `"update": true` and the same `id`.
 7. When race data or the event graphic changes, RDS Results sends a fresh `welcome`, `eventWelcome`, or `board`.
-8. When the operator changes the jumbotron mode in RDS Results, RDS Results sends `mode`.
-9. RDS Results sends `ping` about every 10 seconds.
+8. When the operator changes the jumbotron mode in RDS Results, RDS Results sends `mode`. If the new mode is `eventWelcome`, `welcome`, or `scrollingResults`, that `mode` line is followed by the current `eventWelcome`, `welcome`, or `board` payload so the display does not have to keep an earlier copy.
+9. RDS Results sends `ping` as soon as the session is replayed, then about every 10 seconds. Each ping carries the host clock, race start time, and current weather so the jumbotron does not fetch those itself.
 
 `hello` means the previous session is stale. Clear reads and standings, then apply the messages that follow.
 
@@ -88,26 +88,35 @@ The display shows the RDS splash graphic and this text. Welcome mode does not se
 | imageMime | MIME type of `image`. Empty when no graphic was chosen. |
 | image | JPEG, PNG, or similar, base64, no line breaks. Empty when no graphic was chosen. RDS Results resizes wide graphics before sending. |
 
-The custom graphic is the background. Sponsor art and a QR code belong on that graphic. The display overlays the event fields.
+The custom graphic is the background. Sponsor art and a QR code belong on that graphic.
+
+Event welcome graphics are 16:9 and keep two empty boxes in a fixed place. The display overlays only the values, using the race start from `ping`. It does not draw the labels.
+
+| Overlay | Graphic box | Position on the 16:9 graphic |
+| --- | --- | --- |
+| Race start time | RACE STARTS AT | left 40.8%–70.4%, top 61%–79% |
+| Countdown | TIME UNTIL START | left 70.4%–100%, top 61%–79% |
 
 ### board
 
 ```json
-{"v":1,"ty":"board","pages":[{"title":"10K Men","rows":[{"place":"1","bib":"101","name":"Ada Lovelace","finishTime":"0:48:10","city":"London"}]}]}
+{"v":1,"ty":"board","pages":[{"title":"10K Overall Men","columns":[{"key":"overall_place","label":"Place","role":"place"},{"key":"bib","label":"Bib","role":"bib"},{"key":"full_name","label":"Name","role":"name"},{"key":"net_time","label":"Net","role":"net"},{"key":"pace","label":"Pace","role":"pace"}],"rows":[{"cells":["1","101","Ada Lovelace","0:48:10","7:45"],"place":"1","bib":"101","name":"Ada Lovelace","finishTime":"0:48:10","pace":"7:45","city":""}]}]}
 ```
 
 | Field | Meaning |
 | --- | --- |
-| pages | Result sets in show order. Men of an event come before women of that event. |
-| pages[].title | Page title, usually event plus Men or Women. |
-| pages[].rows | Finishers on that page, place order. |
-| rows[].place | Overall place. |
-| rows[].bib | Bib number. |
-| rows[].name | Athlete name. |
-| rows[].finishTime | Chip time when present, otherwise clock time. |
-| rows[].city | City and state when present. |
+| pages | Result sets in show order. Each report is its own set, split by event, men before women. |
+| pages[].title | Page title, usually the report name plus Men or Women. |
+| pages[].columns | Fields to draw, left to right. Place and name are always included. The other columns are the ones chosen for that report. |
+| columns[].key | Stable id from the report column. |
+| columns[].label | Header text, from the report when it has one. |
+| columns[].role | `place`, `name`, `bib`, `chip`, `city`, `state`, `event`, `clock`, `net`, `pace`, `division`, `agePlace`, `gender`, `age`, `ageGroup`, or `other`. Use it to size the column. |
+| pages[].rows | Finishers on that page, overall-place order. |
+| rows[].cells | Values in the same order as `columns`. |
 
-The display scrolls one page, then advances. A later poll replaces `board` only when the standings changed.
+`place`, `bib`, `name`, `finishTime`, `pace`, and `city` are still sent on each row. Draw `columns` and `cells`. The named fields stay so an older screen can show place, bib, name, finish time, pace, and city when those columns are selected. `finishTime` is the net time when that column is selected, otherwise the clock time.
+
+The display scrolls one page, then advances. A later poll replaces `board` when the standings or the chosen columns changed.
 
 ### read
 
@@ -149,10 +158,32 @@ When `update` is `true`, replace the row with the same `id`. When the client has
 ### ping
 
 ```json
-{"v":1,"ty":"ping"}
+{"v":1,"ty":"ping","time":"9:25 AM","date":"Thu Oct 22","h":9,"m":25,"s":12,"race":{"start":"7:30 AM","h":7,"m":30,"s":0,"y":2026,"mo":10,"d":22},"wx":{"loc":"Londonderry, NH","temp":"58°F","cond":"Partly cloudy"}}
 ```
 
-The client may ignore `ping`. It shows that the socket is still open.
+| Field | Meaning |
+| --- | --- |
+| time | Host local time, 12-hour clock with AM/PM. Ready to show as-is. |
+| date | Host local date, for example `Thu Oct 22`. |
+| h | Host local hour, 0–23. |
+| m | Host local minute, 0–59. |
+| s | Host local second, 0–59. |
+| race | Race start from RDS Results. Omitted until a start time is set. |
+| race.start | Start time ready to show as-is, for example `7:30 AM`. |
+| race.h | Start hour, 0–23. |
+| race.m | Start minute, 0–59. |
+| race.s | Start second, 0–59. |
+| race.y | Start year. |
+| race.mo | Start month, 1–12. |
+| race.d | Start day of month. |
+| wx | Current weather from RDS Results. Omitted until the first weather fetch succeeds. |
+| wx.loc | Place name. |
+| wx.temp | Temperature, including the unit. |
+| wx.cond | Short condition, for example `Partly cloudy`. |
+
+Use `time` and `date` on screen. Use `h`, `m`, and `s` to keep the clock ticking between pings. Do not use the jumbotron’s own clock or timezone. Do not fetch weather from the jumbotron.
+
+On Event welcome, show `race.start` in the left box and count down from `race` to the host clock in the right box. After the start, show `0:00:00`. Older servers may send an empty ping; treat missing fields as “not yet available.”
 
 ## Matching behavior the display can rely on
 

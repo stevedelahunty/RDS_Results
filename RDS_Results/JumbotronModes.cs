@@ -12,7 +12,7 @@ public static class JumbotronModes
     public static readonly JumbotronMode[] All =
     [
         new(Welcome, "Welcome", "App splash screen."),
-        new(EventWelcome, "Event welcome", "Custom event graphic with start info and how to view results."),
+        new(EventWelcome, "Event welcome", "Custom event graphic with race start time and a countdown."),
         new(BibReads, "Bib reads", "Walk-up results as announcer reads arrive."),
         new(Selfies, "Selfies", "Selfie station."),
         new(ScrollingResults, "Scrolling results", "Standings by results set, men then women."),

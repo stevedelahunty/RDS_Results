@@ -44,6 +44,10 @@ public partial class SettingsPanel : UserControl
 
     void EventWelcome_LostFocus(object sender, RoutedEventArgs e) => Host!.EventWelcome_LostFocus(sender, e);
 
+    void RaceStart_LostFocus(object sender, RoutedEventArgs e) => Host!.RaceStart_LostFocus(sender, e);
+
+    void Weather_LostFocus(object sender, RoutedEventArgs e) => Host!.Weather_LostFocus(sender, e);
+
     void Camera_LostFocus(object sender, RoutedEventArgs e) => Host!.Camera_LostFocus(sender, e);
 
     void CameraAdvanced_Changed(object sender, RoutedEventArgs e) => Host!.CameraAdvanced_Changed(sender, e);

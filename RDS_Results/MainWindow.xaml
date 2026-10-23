@@ -2,7 +2,6 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:RDS_Results"
-        xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
         Title="RDS Results"
         Height="940"
         Width="1440"
@@ -115,6 +114,28 @@
             </Grid>
         </Border>
 
+        <Border DockPanel.Dock="Bottom"
+                Margin="0,10,0,0"
+                Background="{DynamicResource PanelBrush}"
+                BorderBrush="{DynamicResource LineBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12,8">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse x:Name="StatusJumboDot" Width="8" Height="8" Fill="{DynamicResource WarnBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="Jumbotron" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" Margin="0,0,6,0"/>
+                <TextBlock x:Name="StatusJumboText" VerticalAlignment="Center" FontWeight="SemiBold" Text="Not connected" TextTrimming="CharacterEllipsis"/>
+                <Border Width="1" Height="14" Background="{DynamicResource LineBrush}" Margin="14,0" VerticalAlignment="Center"/>
+                <Ellipse x:Name="StatusRdsDot" Width="8" Height="8" Fill="{DynamicResource WarnBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="RaceDay" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" Margin="0,0,6,0"/>
+                <TextBlock x:Name="StatusRdsText" VerticalAlignment="Center" FontWeight="SemiBold" Text="Connecting" TextTrimming="CharacterEllipsis"/>
+                <Border Width="1" Height="14" Background="{DynamicResource LineBrush}" Margin="14,0" VerticalAlignment="Center"/>
+                <Ellipse x:Name="StatusCameraDot" Width="8" Height="8" Fill="{DynamicResource WarnBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <TextBlock Text="Camera" VerticalAlignment="Center" Foreground="{DynamicResource MutedBrush}" Margin="0,0,6,0"/>
+                <TextBlock x:Name="StatusCameraText" VerticalAlignment="Center" FontWeight="SemiBold" Text="Not set" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+        </Border>
+
         <Grid>
             <DockPanel x:Name="ResultsBoard">
                 <UniformGrid DockPanel.Dock="Top" Columns="4" Margin="0,0,0,10">
@@ -210,10 +231,14 @@
                                        Foreground="{DynamicResource MutedBrush}"
                                        TextWrapping="NoWrap"
                                        TextTrimming="CharacterEllipsis"
-                                       Text="No display client connected."/>
+                                       ToolTip="Camera status"
+                                       Text="No camera configured."/>
                             <Border Background="{DynamicResource InputBrush}" CornerRadius="6" ClipToBounds="True">
                                 <Grid>
-                                    <vlc:VideoView x:Name="CameraView"/>
+                                    <Image x:Name="CameraImage"
+                                           Stretch="Uniform"
+                                           SnapsToDevicePixels="True"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
                                     <TextBlock x:Name="CameraHintText"
                                                Text="Set a camera IP in Settings."
                                                Foreground="{DynamicResource MutedBrush}"
@@ -252,34 +277,34 @@
                     <Border Grid.Column="2" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="8" Padding="12">
                         <Grid>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
                             <DockPanel>
                                 <TextBlock DockPanel.Dock="Top" Text="Event statistics" FontWeight="SemiBold" Margin="0,0,0,8"/>
                                 <UniformGrid Columns="2" Rows="2">
-                                    <StackPanel Margin="0,0,8,6">
-                                        <TextBlock x:Name="StatReports" FontSize="20" FontWeight="Bold" Text="0"/>
-                                        <TextBlock Text="Reports" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,8,2">
+                                        <TextBlock Text="Reports" Width="76" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MutedBrush}"/>
+                                        <TextBlock x:Name="StatReports" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" Text="0"/>
                                     </StackPanel>
-                                    <StackPanel Margin="0,0,0,6">
-                                        <TextBlock x:Name="StatFinishers" FontSize="20" FontWeight="Bold" Text="0"/>
-                                        <TextBlock Text="Finishers" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
+                                        <TextBlock Text="Finishers" Width="76" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MutedBrush}"/>
+                                        <TextBlock x:Name="StatFinishers" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" Text="0"/>
                                     </StackPanel>
-                                    <StackPanel Margin="0,0,8,0">
-                                        <TextBlock x:Name="StatDisplays" FontSize="20" FontWeight="Bold" Text="0"/>
-                                        <TextBlock Text="Displays" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,8,2">
+                                        <TextBlock Text="Displays" Width="76" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MutedBrush}"/>
+                                        <TextBlock x:Name="StatDisplays" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" Text="0"/>
                                     </StackPanel>
-                                    <StackPanel>
-                                        <TextBlock x:Name="StatWaiting" FontSize="20" FontWeight="Bold" Text="0"/>
-                                        <TextBlock Text="Waiting" FontSize="11" Foreground="{DynamicResource MutedBrush}"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,2">
+                                        <TextBlock Text="Waiting" Width="76" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource MutedBrush}"/>
+                                        <TextBlock x:Name="StatWaiting" FontSize="18" FontWeight="Bold" VerticalAlignment="Center" Text="0"/>
                                     </StackPanel>
                                 </UniformGrid>
                             </DockPanel>
                             <Border Grid.Row="1" Height="1" Background="{DynamicResource LineBrush}" Margin="0,8"/>
                             <DockPanel Grid.Row="2">
-                                <TextBlock DockPanel.Dock="Top" Text="Race time" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                                <TextBlock DockPanel.Dock="Top" Text="Clock" FontWeight="SemiBold" Margin="0,0,0,6"/>
                                 <TextBlock DockPanel.Dock="Top"
                                            x:Name="RaceClockText"
                                            FontSize="26"
@@ -296,7 +321,7 @@
                                            VerticalAlignment="Top"
                                            Foreground="{DynamicResource MutedBrush}"
                                            TextWrapping="Wrap"
-                                           Text="Clocks will follow this time."/>
+                                           Text="This is the computer clock. The jumbotron follows it."/>
                             </DockPanel>
                         </Grid>
                     </Border>

@@ -278,6 +278,8 @@ public sealed class AppSettings
     public string JumbotronHost { get; set; } = "127.0.0.1";
     public int SendPort { get; set; } = 9100;
     public string JumbotronMode { get; set; } = JumbotronModes.BibReads;
+    public string RaceStartTime { get; set; } = "";
+    public string WeatherLocation { get; set; } = WeatherFeed.DefaultPlace;
     public string EventWelcomeImage { get; set; } = "";
     public string EventWelcomeHint { get; set; } = "";
     public string EventWelcomeUrl { get; set; } = "";
@@ -286,6 +288,7 @@ public sealed class AppSettings
     public bool CameraAdvanced { get; set; }
     public bool CameraUseExact { get; set; }
     public string CameraExactUrl { get; set; } = "";
+    public List<ScrollReportSetting> ScrollReports { get; set; } = new();
 }
 
 public sealed class LocationChoice : INotifyPropertyChanged
